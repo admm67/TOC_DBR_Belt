@@ -1,0 +1,146 @@
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: #f0f2f5;
+    color: #1c1e21;
+    padding: 20px;
+}
+h1, .controls { text-align: center; margin-bottom: 20px; }
+.controls { display: flex; justify-content: center; gap: 10px; }
+.controls button {
+    font-size: 16px;
+    padding: 10px 20px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+#start-simulation { background-color: #007bff; color: white; }
+#pause-simulation { background-color: #ffc107; color: #212529; }
+#resume-simulation { background-color: #28a745; color: white; }
+#fast-forward-simulation { background-color: #17a2b8; color: white; }
+.controls button:disabled { background-color: #e9ecef; color: #6c757d; cursor: not-allowed; border-color: #ced4da; }
+
+#simulation-status-bar {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    padding: 10px;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    margin: 0 auto 20px auto;
+    max-width: 400px;
+    font-size: 1.1em;
+}
+#simulation-status-bar span { font-weight: bold; }
+#status-display.on-break { color: #dc3545; }
+
+#simulation-container, #stations-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.station-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px;
+    background-color: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    min-width: 160px;
+    transition: background-color 0.3s;
+}
+.station-container.on-break { background-color: #e9ecef; }
+
+.station-container h2 {
+    font-size: 1em;
+    margin: 5px 0 10px 0;
+    color: #606770;
+}
+
+.station, .wip-buffer {
+    width: 100%;
+    min-height: 80px;
+    border-radius: 6px;
+    padding: 5px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    justify-content: center;
+    align-content: flex-start;
+}
+.station {
+    border: 1px solid #ccd0d5;
+    background-color: #f0f2f5;
+}
+.wip-buffer {
+    min-height: 150px;
+    border: 2px dashed #ced4da;
+    background-color: #f8f9fa;
+}
+
+.drum { border: 3px solid #dc3545; }
+.drum-container { background-color: #f8d7da; }
+
+.v-belt-set {
+    width: 30px;
+    height: 30px;
+    background-color: #007bff;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6em;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+.v-belt-set.processing { background-color: #ffc107; }
+
+.stats-display {
+    width: 100%;
+    margin-top: 10px;
+    padding: 8px;
+    font-size: 0.85em;
+    color: #495057;
+    background-color: #e9ecef;
+    border-radius: 6px;
+}
+.stats-display div { margin-bottom: 4px; }
+.stats-display span { font-weight: bold; float: right; }
+
+#summary-report {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 900px;
+    max-height: 90vh;
+    overflow-y: auto;
+    background-color: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+    padding: 25px;
+    z-index: 1000;
+    text-align: center;
+}
+#summary-report.hidden { display: none; }
+#summary-content { text-align: left; margin: 20px 0; }
+#summary-content h3 { border-bottom: 1px solid #eee; padding-bottom: 5px; margin-top: 25px; }
+#summary-content table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+#summary-content th, #summary-content td { border: 1px solid #dee2e6; padding: 8px; text-align: center; }
+#summary-content th { background-color: #f8f9fa; }
+#close-summary {
+    font-size: 16px;
+    padding: 10px 20px;
+    cursor: pointer;
+    border: 1px solid #ccc;
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    margin-top: 20px;
+}
