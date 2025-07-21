@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced DBR Simulation (Full Controls)</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>V-Belt DBR Simulation (Full Controls)</h1>
+    <div class="controls">
+        <button id="start-simulation">Start New Simulation</button>
+        <button id="pause-simulation" disabled>Pause</button>
+        <button id="resume-simulation" disabled>Resume</button>
+        <button id="fast-forward-simulation" disabled>Fast Forward (x1)</button>
+    </div>
+    
+    <div id="simulation-status-bar">
+        <div>Shift Time: <span id="clock-display">00:00:00</span></div>
+        <div>Status: <span id="status-display">Idle</span></div>
+    </div>
+
+    <div id="simulation-container">
+        <!-- Backlog -->
+        <div class="station-container">
+            <h2>Backlog</h2>
+            <div class="wip-buffer" id="backlog-buffer"></div>
+            <div class="stats-display" id="backlog-buffer-stats">
+                <div>WIP: <span class="wip-current">0</span></div>
+                <div>Avg WIP: <span class="wip-avg">0.0</span></div>
+            </div>
+        </div>
+
+        <!-- Production Line -->
+        <div id="stations-wrapper"></div>
+
+        <!-- Finished Goods -->
+        <div class="station-container">
+            <h2>Finished</h2>
+            <div class="wip-buffer" id="finished-goods"></div>
+            <div class="stats-display" id="finished-goods-stats">
+                <div>Total Out: <span class="finished-total">0</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Report Container -->
+    <div id="summary-report" class="hidden">
+        <h2>Simulation Over!</h2>
+        <div id="summary-content"></div>
+        <button id="close-summary">Close</button>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
