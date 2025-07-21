@@ -106,29 +106,44 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Reset WIP ---
-    if(resetButton) resetButton.addEventListener('click', () => {
-        Object.values(activeConfig.stations).forEach(station => {
-            // Clear WIP buffers and station processing areas except backlog and finished
-            [station.inputBuffer, station.outputBuffer].forEach(bufferId => {
-                if(bufferId && bufferId !== 'backlog-buffer' && bufferId !== 'finished-goods') {
-                    const bufferEl = document.getElementById(bufferId);
-                    if(bufferEl) bufferEl.innerHTML = '';
-                }
-            });
-            const stationEl = document.getElementById(station.name);
-            const stationDiv = document.getElementById(station.inputBuffer);
-            if(stationDiv && station.inputBuffer !== 'backlog-buffer') stationDiv.innerHTML = '';
-            if(stationEl) stationEl.innerHTML = '';
-        });
-        // Reset stats
-        Object.values(stats.stations).forEach(st => {
-            st.setsProcessed = 0;
-            st.idleTime = 0;
-            st.workingTime = 0;
-            st.utilization = 0;
-        });
-        updateDashboard();
+    function resetWIP() {
+    // Clear all process stations (in-process sets)
+    Object.keys(activeConfig.stations).forEach(stationId => {
+        const stationEl = document.getElementById(stationId);
+        if (stationEl) stationEl.innerHTML = '';
     });
+
+    // Clear all WIP buffers, including backlog and finished
+    const bufferIDs = [
+        'backlog-buffer',
+        'building-wip',
+        'cutting-wip',
+        'flipping-wip',
+        'curing-wip',
+        'finished-goods'
+    ];
+    bufferIDs.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '';
+    });
+
+    // Optionally, reset runtime statistics (recommended for a true clean reset)
+    Object.values(stats.stations).forEach(st => {
+        st.setsProcessed = 0;
+        st.idleTime = 0;
+        st.workingTime = 0;
+        st.utilization = 0;
+    });
+    Object.values(stats.buffers).forEach(bf => {
+        bf.history = [];
+        bf.avg = 0;
+    });
+    if (stats.hourlyOutput) stats.hourlyOutput = stats.hourlyOutput.map(() => 0);
+
+    setCounter = 0;
+    updateDashboard();
+}
+
 
     // --- Start Simulation ---
     function startSimulation(params) {
