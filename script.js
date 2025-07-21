@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const pauseButton = document.getElementById('pause-simulation');
     const resumeButton = document.getElementById('resume-simulation');
     const ffButton = document.getElementById('fast-forward-simulation');
+    const resetButton = document.getElementById('reset-wip');
     const stationsWrapper = document.getElementById('stations-wrapper');
     const summaryReportEl = document.getElementById('summary-report');
     const summaryContentEl = document.getElementById('summary-content');
@@ -21,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let initialBacklogSize = 0;
     let currentSpeedMultiplier = 1;
 
+    // --- Get User Configuration ---
     function getSimulationParameters() {
         const shifts = parseInt(prompt("Enter number of shifts (1, 2, or 3):", "1")) || 1;
         const building = parseInt(prompt("Enter number of Building machines:", "1")) || 1;
@@ -36,10 +38,13 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
+    // --- Setup Simulation ---
     function setupSimulation(params) {
         initialBacklogSize = params.backlog;
         currentSpeedMultiplier = 1;
-        ffButton.textContent = `Fast Forward (x1)`;
+        if(ffButton) ffButton.textContent = `Fast Forward (x1)`;
+        if(resetButton) resetButton.disabled = false;
+
         activeConfig = {
             timeScale: 60,
             shiftDetails: {
@@ -50,17 +55,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 Building: { name: "Building", capacity: params.building, time: 379.2, inputBuffer: 'backlog-buffer', outputBuffer: 'building-wip' },
                 Cutting: { name: "Cutting", capacity: params.cutting, time: 240, inputBuffer: 'building-wip', outputBuffer: 'cutting-wip' },
                 Flipping: { name: "Flipping", capacity: params.flipping, time: 600, inputBuffer: 'cutting-wip', outputBuffer: 'flipping-wip' },
-                Curing: { name: "Curing (DRUM)", capacity: params.curing, breakCapacity: Math.ceil(params.curing / 2), time: 1596, inputBuffer: 'flipping-wip', outputBuffer: 'curing-wip', isDrum: true },
+                Curing: { name: "Curing (DRUM)", capacity: params.curing,
+                         breakCapacity: Math.ceil(params.curing / 2),
+                         time: 1596,
+                         inputBuffer: 'flipping-wip', outputBuffer: 'curing-wip',
+                         isDrum: true },
                 Coding: { name: "Coding", capacity: params.coding, time: 496.2, inputBuffer: 'curing-wip', outputBuffer: 'finished-goods' }
             }
         };
 
+        // Define breaks for each shift
         for (let i = 0; i < params.shifts; i++) {
             const shiftStart = i * 8 * 3600 * 1000;
             activeConfig.shiftDetails.breaks.push(
-                { name: `S${i+1} Bio 1`, start: shiftStart + (2 * 3600 * 1000), end: shiftStart + (2 * 3600 * 1000) + (10 * 60 * 1000) },
-                { name: `S${i+1} Lunch`, start: shiftStart + (4 * 3600 * 1000), end: shiftStart + (4 * 3600 * 1000) + (30 * 60 * 1000) },
-                { name: `S${i+1} Bio 2`, start: shiftStart + (6 * 3600 * 1000), end: shiftStart + (6 * 3600 * 1000) + (10 * 60 * 1000) }
+                { name: `S${i+1} Bio Break 1`, start: shiftStart + 2*3600*1000, end: shiftStart + 2*3600*1000 + 10*60*1000},
+                { name: `S${i+1} Lunch`, start: shiftStart + 4*3600*1000, end: shiftStart + 4*3600*1000 + 30*60*1000 },
+                { name: `S${i+1} Bio Break 2`, start: shiftStart + 6*3600*1000, end: shiftStart + 6*3600*1000 + 10*60*1000 }
             );
         }
 
@@ -73,13 +83,54 @@ document.addEventListener('DOMContentLoaded', () => {
             let wipHtml = '';
             if (station.outputBuffer !== 'finished-goods') {
                 stats.buffers[station.outputBuffer] = { history: [], avg: 0 };
-                wipHtml = `<div class="wip-buffer" id="${station.outputBuffer}"></div><div class="stats-display" id="${station.outputBuffer}-stats">...</div>`;
+                wipHtml = `
+                  <div class="wip-buffer" id="${station.outputBuffer}"></div>
+                  <div class="stats-display" id="${station.outputBuffer}-stats">
+                    <div>WIP: <span class="wip-current">0</span></div>
+                    <div>Avg WIP: <span class="wip-avg">0.0</span></div>
+                  </div>`;
             }
-            stationsWrapper.innerHTML += `<div class="station-container ${station.isDrum ? 'drum-container' : ''}" id="${id}-container"><h2>${station.name} (${station.capacity})</h2><div class="station ${station.isDrum ? 'drum' : ''}" id="${id}"></div><div class="stats-display" id="${id}-stats">...</div>${wipHtml}</div>`;
+            stationsWrapper.innerHTML += `
+              <div class="station-container ${station.isDrum ? 'drum-container' : ''}" id="${id}-container">
+                <h2>${station.name} (${station.capacity})</h2>
+                <div class="station ${station.isDrum ? 'drum' : ''}" id="${id}"></div>
+                <div class="stats-display" id="${id}-stats">
+                  <div>Util: <span class="utilization">0.0%</span></div>
+                  <div>Idle: <span class="idle-time">0s</span></div>
+                </div>
+                ${wipHtml}
+              </div>`;
         });
+
         stats.buffers['backlog-buffer'] = { history: [], avg: 0 };
     }
 
+    // --- Reset WIP ---
+    if(resetButton) resetButton.addEventListener('click', () => {
+        Object.values(activeConfig.stations).forEach(station => {
+            // Clear WIP buffers and station processing areas except backlog and finished
+            [station.inputBuffer, station.outputBuffer].forEach(bufferId => {
+                if(bufferId && bufferId !== 'backlog-buffer' && bufferId !== 'finished-goods') {
+                    const bufferEl = document.getElementById(bufferId);
+                    if(bufferEl) bufferEl.innerHTML = '';
+                }
+            });
+            const stationEl = document.getElementById(station.name);
+            const stationDiv = document.getElementById(station.inputBuffer);
+            if(stationDiv && station.inputBuffer !== 'backlog-buffer') stationDiv.innerHTML = '';
+            if(stationEl) stationEl.innerHTML = '';
+        });
+        // Reset stats
+        Object.values(stats.stations).forEach(st => {
+            st.setsProcessed = 0;
+            st.idleTime = 0;
+            st.workingTime = 0;
+            st.utilization = 0;
+        });
+        updateDashboard();
+    });
+
+    // --- Start Simulation ---
     function startSimulation(params) {
         pauseSimulation();
         summaryReportEl.classList.add('hidden');
@@ -98,42 +149,42 @@ document.addEventListener('DOMContentLoaded', () => {
         startButton.disabled = true;
     }
     
+    // --- Pause/Resume/FastForward Controls ---
     function pauseSimulation() {
         clearInterval(simulationInterval);
         clearInterval(dashboardInterval);
         simulationInterval = null;
         dashboardInterval = null;
-        if(simulationTime > 0 && simulationTime < activeConfig.shiftDetails.duration) {
-            updateButtonStates(true);
-        }
+        updateControlButtons(true);
     }
     
     function resumeSimulation() {
         if(simulationInterval) return;
-        // --- THIS IS THE FIX ---
-        // Both intervals now respect the speed multiplier
         simulationInterval = setInterval(simulationTick, 200 / currentSpeedMultiplier);
-        dashboardInterval = setInterval(updateDashboard, 1000 / currentSpeedMultiplier);
-        updateButtonStates(false);
+        dashboardInterval = setInterval(() => updateDashboard(), 1000 / currentSpeedMultiplier);
+        updateControlButtons(false);
     }
 
     function fastForward() {
         currentSpeedMultiplier *= 2;
         ffButton.textContent = `Fast Forward (x${currentSpeedMultiplier})`;
+        // Restart intervals with new fast speed
         pauseSimulation();
         resumeSimulation();
     }
     
-    function updateButtonStates(isPaused) {
-        pauseButton.disabled = isPaused;
-        resumeButton.disabled = !isPaused;
-        ffButton.disabled = isPaused;
+    function updateControlButtons(paused) {
+        pauseButton.disabled = paused;
+        resumeButton.disabled = !paused;
+        ffButton.disabled = paused;
+        resetButton.disabled = !paused && simulationTime > 0 && simulationTime < activeConfig.shiftDetails.duration ? false : true;
     }
 
+    // --- Simulation Tick ---
     function simulationTick() {
-        const tickDuration = 200 * activeConfig.timeScale;
+        const tickDuration = (200 * activeConfig.timeScale);
         simulationTime += tickDuration;
-        
+
         const currentBreak = checkForBreak(simulationTime);
 
         Object.keys(activeConfig.stations).forEach(stationId => {
@@ -142,26 +193,33 @@ document.addEventListener('DOMContentLoaded', () => {
             const inputBufferEl = document.getElementById(stationConfig.inputBuffer);
             
             let currentCapacity = stationConfig.capacity;
-            let isPaused = false;
+            const isPaused = currentBreak && (stationId !== 'Curing');
 
-            if (currentBreak) {
-                if (stationId === 'Curing') currentCapacity = stationConfig.breakCapacity;
-                else isPaused = true;
+            if (currentBreak && stationId === 'Curing') {
+                currentCapacity = stationConfig.breakCapacity;
             }
             
             const setsInProcess = stationEl.children.length;
             const freeCapacity = currentCapacity - setsInProcess;
 
+            // Count idle time only if not paused and no input work
             if (!isPaused && freeCapacity > 0 && inputBufferEl.children.length === 0) {
-                 stats.stations[stationId].idleTime += (tickDuration * freeCapacity);
+                stats.stations[stationId].idleTime += (tickDuration * freeCapacity);
             }
-            
+
             if (!isPaused && freeCapacity > 0 && inputBufferEl.children.length > 0) {
                 const setToProcess = inputBufferEl.firstElementChild;
                 startProcessing(setToProcess, stationId, stationConfig);
             }
         });
 
+        // Record WIP histories
+        Object.keys(stats.buffers).forEach(bufferId => {
+            const bufferEl = document.getElementById(bufferId);
+            if(bufferEl) stats.buffers[bufferId].history.push(bufferEl.children.length);
+        });
+
+        // Hourly output tracking
         const currentHour = Math.floor(simulationTime / (3600 * 1000));
         if(currentHour < stats.hourlyOutput.length) {
             stats.hourlyOutput[currentHour] = document.getElementById('finished-goods').children.length;
@@ -172,6 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    // --- Dashboard Update ---
     function updateDashboard() {
         const totalSeconds = Math.floor(simulationTime / 1000);
         const hours = Math.floor(totalSeconds / 3600);
@@ -183,15 +242,16 @@ document.addEventListener('DOMContentLoaded', () => {
         statusDisplay.textContent = currentBreak ? currentBreak.name : 'Running';
         statusDisplay.classList.toggle('on-break', !!currentBreak);
         document.querySelectorAll('.station-container').forEach(el => el.classList.remove('on-break'));
-        if(currentBreak) {
-             Object.keys(activeConfig.stations).forEach(id => {
+        if (currentBreak) {
+            Object.keys(activeConfig.stations).forEach(id => {
                 if(id !== 'Curing') document.getElementById(`${id}-container`).classList.add('on-break');
-             });
+            });
         }
         
         calculateAndDisplayFinalStats(false); 
     }
 
+    // --- Start Processing a Set ---
     function startProcessing(set, stationId, stationConfig) {
         const stationEl = document.getElementById(stationId);
         stationEl.appendChild(set);
@@ -212,6 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
         pauseButton.disabled = true;
         resumeButton.disabled = true;
         ffButton.disabled = true;
+        resetButton.disabled = true;
         generateSummaryReport();
     }
 
@@ -247,7 +308,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!isFinalReport) {
                 const statsEl = document.getElementById(`${id}-stats`);
-                if(statsEl) statsEl.innerHTML = `<div>Util: <span class="utilization">${stationStats.utilization.toFixed(1)}%</span></div><div>Idle: <span class="idle-time">${(stationStats.idleTime / (1000 * 60)).toFixed(1)}m</span></div>`;
+                if(statsEl) {
+                    statsEl.innerHTML = `<div>Util: <span class="utilization">${stationStats.utilization.toFixed(1)}%</span></div>
+                                         <div>Idle: <span class="idle-time">${(stationStats.idleTime / (1000 * 60)).toFixed(1)}m</span></div>`;
+                }
             }
         });
 
@@ -256,14 +320,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 const bufferStats = stats.buffers[bufferId];
                 const bufferEl = document.getElementById(bufferId);
                 const statsEl = document.getElementById(`${bufferId}-stats`);
-                if (bufferEl && statsEl) {
-                    const currentWIP = bufferEl.children.length;
-                    const sumWIP = bufferStats.history.reduce((a, b) => a + b, 0);
-                    bufferStats.avg = sumWIP / bufferStats.history.length || 0;
-                    statsEl.innerHTML = `<div>WIP: <span class="wip-current">${currentWIP}</span></div><div>Avg WIP: <span class="wip-avg">${bufferStats.avg.toFixed(1)}</span></div>`;
-                }
+                if (!bufferEl || !statsEl) return;
+                const currentWIP = bufferEl.children.length;
+                const sumWIP = bufferStats.history.reduce((a, b) => a + b, 0);
+                bufferStats.avg = sumWIP / bufferStats.history.length || 0;
+                statsEl.innerHTML = `<div>WIP: <span class="wip-current">${currentWIP}</span></div>
+                                     <div>Avg WIP: <span class="wip-avg">${bufferStats.avg.toFixed(1)}</span></div>`;
             });
-            document.querySelector('#finished-goods-stats .finished-total').textContent = document.getElementById('finished-goods').children.length;
+            const finishedTotalEl = document.querySelector('#finished-goods-stats .finished-total');
+            if(finishedTotalEl) finishedTotalEl.textContent = document.getElementById('finished-goods').children.length;
         }
     }
 
@@ -285,46 +350,65 @@ document.addEventListener('DOMContentLoaded', () => {
                 <tr><td>Coding Machines</td><td>${activeConfig.stations.Coding.capacity}</td></tr>
             </table>`;
         
-        reportHTML += `<h3>Hour-wise Production Output</h3><table><tr><th>Hour</th><th>Sets Completed</th></tr>`;
+        reportHTML += `
+            <h3>Hour-wise Production Output</h3>
+            <table>
+                <tr><th>Hour</th><th>Sets Completed</th></tr>`;
         let lastHourCount = 0;
         stats.hourlyOutput.forEach((cumulativeCount, i) => {
             const hourlyCount = cumulativeCount - lastHourCount;
-            reportHTML += `<tr><td>Hour ${i + 1}</td><td>${hourlyCount}</td></tr>`;
+            reportHTML += `<tr><td>${i + 1}</td><td>${hourlyCount}</td></tr>`;
             lastHourCount = cumulativeCount;
         });
         reportHTML += `</table>`;
 
         const lineThroughput = finishedCount / totalSimHours;
-        reportHTML += `<h3>Throughput & Process Analysis</h3>
+        reportHTML += `
+            <h3>Throughput & Process Analysis</h3>
             <p><strong>Overall Line Throughput:</strong> ${lineThroughput.toFixed(2)} sets per hour</p>
-            <table><tr><th>Station</th><th>Throughput (Sets/Hr)</th><th>Avg. Utilization</th><th>Idle Time (min)</th></tr>`;
+            <table>
+                <tr><th>Station</th><th>Throughput (Sets/Hr)</th><th>Avg. Utilization</th><th>Idle Time (min)</th><th>Completed Sets</th></tr>`;
         Object.values(stats.stations).forEach(station => {
             const stationWorkingHours = station.workingTime / (3600 * 1000);
             const throughput = stationWorkingHours > 0 ? station.setsProcessed / stationWorkingHours : 0;
-            reportHTML += `<tr><td>${station.name}</td><td>${throughput.toFixed(2)}</td><td>${station.utilization.toFixed(1)}%</td><td>${(station.idleTime / (1000 * 60)).toFixed(1)}</td></tr>`;
+            reportHTML += `
+                <tr>
+                    <td>${station.name}</td>
+                    <td>${throughput.toFixed(2)}</td>
+                    <td>${station.utilization.toFixed(1)}%</td>
+                    <td>${(station.idleTime / (1000 * 60)).toFixed(1)}</td>
+                    <td>${station.setsProcessed}</td>
+                </tr>`;
         });
         reportHTML += `</table>`;
 
-        reportHTML += `<h3>Buffer Analysis</h3><table><tr><th>Buffer</th><th>Avg. WIP</th></tr>`;
+        reportHTML += `
+            <h3>Buffer Analysis</h3>
+            <table>
+                <tr><th>Buffer</th><th>Actual WIP (End)</th></tr>`;
         Object.keys(stats.buffers).forEach(id => {
              const buffer = stats.buffers[id];
+             const bufferEl = document.getElementById(id);
              const name = id.replace('-wip', ' WIP').replace('-buffer', '').replace(/^\w/, c => c.toUpperCase());
-             reportHTML += `<tr><td>${name}</td><td>${buffer.avg.toFixed(2)}</td></tr>`;
+             const actualWIP = bufferEl ? bufferEl.children.length : 0;
+             reportHTML += `<tr><td>${name}</td><td>${actualWIP}</td></tr>`;
         });
         reportHTML += `</table>`;
         
         let bottleneck = { utilization: -1 };
         Object.values(stats.stations).forEach(station => {
-            if (station.utilization > bottleneck.utilization) bottleneck = station;
+            if(station.utilization > bottleneck.utilization) bottleneck = station;
         });
         
-        reportHTML += `<hr><h3>Descriptive Analysis & Suggestions</h3>
-            <p><strong>Primary Bottleneck:</strong> The simulation identifies <strong>${bottleneck.name}</strong> as the primary constraint with <strong>${bottleneck.utilization.toFixed(1)}%</strong> utilization.</p>
+        reportHTML += `
+            <hr>
+            <h3>Descriptive Analysis & Suggestions</h3>
+            <p><strong>Primary Bottleneck:</strong> The simulation identifies <strong>${bottleneck.name}</strong>
+            as the primary constraint with <strong>${bottleneck.utilization.toFixed(1)}%</strong> utilization.</p>
             <ul>
                 <li><strong>Focus Here:</strong> Any improvement to the <strong>${bottleneck.name}</strong> station will directly increase overall throughput.</li>
-                <li><strong>Protect this Station:</strong> The buffer before this station is critical. Analyze its Avg. WIP to ensure the bottleneck is rarely starved.</li>
-            </ul>
-        `;
+                <li><strong>Protect this Station:</strong> The buffer before this station is critical. Analyze its Actual WIP to ensure the bottleneck is rarely starved.</li>
+            </ul>`;
 
         summaryContentEl.innerHTML = reportHTML;
         summaryReportEl.classList.remove('hidden');
@@ -334,8 +418,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const userParams = getSimulationParameters();
         startSimulation(userParams);
     });
-    pauseButton.addEventListener('click', pauseSimulation);
-    resumeButton.addEventListener('click', resumeSimulation);
-    ffButton.addEventListener('click', fastForward);
+    pauseButton.addEventListener('click', () => pauseSimulation());
+    resumeButton.addEventListener('click', () => resumeSimulation());
+    ffButton.addEventListener('click', () => fastForward());
+    if(resetButton) resetButton.addEventListener('click', () => {
+        Object.values(activeConfig.stations).forEach(station => {
+            ['inputBuffer', 'outputBuffer'].forEach(bufferID => {
+                const bufferEl = document.getElementById(station[bufferID]);
+                if(bufferEl && bufferEl.id !== 'backlog-buffer' && bufferEl.id !== 'finished-goods') bufferEl.innerHTML = '';
+            });
+        });
+        Object.values(stats.stations).forEach(s => {
+            s.setsProcessed = 0; s.idleTime = 0; s.workingTime=0; s.utilization=0;
+        });
+        updateDashboard();
+    });
     closeSummaryButton.addEventListener('click', () => summaryReportEl.classList.add('hidden'));
 });
