@@ -36,12 +36,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isNaN(shifts) || isNaN(backlog) || isNaN(building) || isNaN(cutting) || isNaN(flipping) || isNaN(curing) || isNaN(coding)) {
             return null;
         }
+        // Store the latest parameters
         currentParams = { shifts, backlog, building, cutting, flipping, curing, coding };
         return currentParams;
     }
 
     function setupSimulation(params) {
-        currentParams = params;
+        currentParams = params; // Ensure currentParams is always up to date
         currentSpeedMultiplier = 1;
         ffButton.textContent = `Fast Forward (x1)`;
 
@@ -100,6 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function runHeadlessSimulation(params) {
+        // This function is for the optimization feature and runs entirely in memory
         const localConfig = JSON.parse(JSON.stringify(activeConfig));
         const stationConfigs = {
             Building: { capacity: params.building, time: 379.2 },
@@ -126,38 +128,32 @@ document.addEventListener('DOMContentLoaded', () => {
             const currentBreak = localConfig.shiftDetails.breaks.find(b => time >= b.start && time < b.end);
 
             Object.entries(localConfig.stations).forEach(([id, s]) => {
-                stations[id] = stations[id].map(timer => {
+                stations[id].forEach((timer, index) => {
                     if (timer > 0) {
-                        timer -= tick;
-                        if (timer <= 0) {
+                        stations[id][index] -= tick;
+                        if (stations[id][index] <= 0) {
                             buffers[s.outputBuffer]++;
-                            return 0;
                         }
                     }
-                    return timer;
                 });
 
                 let isPaused = currentBreak && id !== 'Curing';
                 let currentCapacity = stationConfigs[id].capacity;
                 if (currentBreak && id === 'Curing') currentCapacity = stationConfigs[id].breakCapacity;
                 
-                stations[id].length = currentCapacity;
-                stations[id].fill(0, stations[id].findIndex(t => t===0) || 0);
-
+                stations[id].length = currentCapacity; // Adjust for breaks
+                
                 if (!isPaused) {
-                    let freeSlots = stations[id].filter(t => t === 0).length;
-                    if (buffers[s.inputBuffer] > 0 && freeSlots > 0) {
-                        const itemsToProcess = Math.min(buffers[s.inputBuffer], freeSlots);
-                        buffers[s.inputBuffer] -= itemsToProcess;
-                        for (let i = 0; i < itemsToProcess; i++) {
-                            const emptySlotIndex = stations[id].findIndex(t => t === 0);
-                            if (emptySlotIndex !== -1) {
-                                stations[id][emptySlotIndex] = stationConfigs[id].time * 1000;
+                    for(let i = 0; i < stations[id].length; i++) {
+                        if (stations[id][i] <= 0) { // Slot is free
+                            if (buffers[s.inputBuffer] > 0) {
+                                buffers[s.inputBuffer]--;
+                                stations[id][i] = stationConfigs[id].time * 1000;
                                 localStats.stations[id].setsProcessed++;
+                            } else {
+                                localStats.stations[id].idleTime += tick;
                             }
                         }
-                    } else if (buffers[s.inputBuffer] === 0) {
-                         localStats.stations[id].idleTime += tick * freeSlots;
                     }
                 }
             });
@@ -249,10 +245,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
-        const currentHour = Math.floor(simulationTime / (3600 * 1000));
-        if (currentHour < stats.hourlyOutput.length) {
-            stats.hourlyOutput[currentHour] = document.getElementById('finished-goods').children.length;
-        }
+        Object.keys(stats.buffers).forEach(bufferId => {
+            const bufferEl = document.getElementById(bufferId);
+            if(bufferEl) stats.buffers[bufferId].history.push(bufferEl.children.length);
+        });
 
         if (simulationTime >= activeConfig.shiftDetails.duration) {
             endSimulation();
@@ -315,36 +311,31 @@ document.addEventListener('DOMContentLoaded', () => {
     function generateSummaryReport(finalStats, params, optimizationResult = null) {
         const finishedCount = optimizationResult ? optimizationResult.buffers['finished-goods'] : document.getElementById('finished-goods').children.length;
         const totalSimHours = params.shifts * 8;
-        const lineThroughput = finishedCount / totalSimHours;
 
         let reportHTML = `
             <h3>Configuration Used</h3>
             <table>
-                <tr><th>Parameter</th><th>Value</th></tr>
-                <tr><td>Number of Shifts</td><td>${params.shifts}</td></tr>
-                <tr><td>Building Machines</td><td>${params.building}</td></tr>
-                <tr><td>Cutting Machines</td><td>${params.cutting}</td></tr>
-                <tr><td>Flipping Machines</td><td>${params.flipping}</td></tr>
-                <tr><td>Curing Machines</td><td>${params.curing}</td></tr>
-                <tr><td>Coding Machines</td><td>${params.coding}</td></tr>
+                <tr><td>Backlog for Shift:</td><td>${params.backlog} sets</td></tr>
+                <tr><td>Flipping Machines:</td><td>${params.flipping}</td></tr>
+                <tr><td>Curing Machines:</td><td>${params.curing}</td></tr>
             </table>`;
         
         if (optimizationResult) {
              reportHTML += `<h3>Optimized Configuration</h3>
              <p>Recommended to complete the full backlog of ${params.backlog} sets.</p>
              <table>
-                <tr><td>Building</td><td>${optimizationResult.params.building}</td></tr>
-                <tr><td>Cutting</td><td>${optimizationResult.params.cutting}</td></tr>
-                <tr><td>Flipping</td><td>${optimizationResult.params.flipping}</td></tr>
-                <tr><td>Curing</td><td>${optimizationResult.params.curing}</td></tr>
-                <tr><td>Coding</td><td>${optimizationResult.params.coding}</td></tr>
+                <tr><td>Building: ${optimizationResult.params.building}</td><td>Cutting: ${optimizationResult.params.cutting}</td></tr>
+                <tr><td>Flipping: ${optimizationResult.params.flipping}</td><td>Curing: ${optimizationResult.params.curing}</td></tr>
+                <tr><td>Coding: ${optimizationResult.params.coding}</td><td></td></tr>
             </table>`;
         }
+        
+        reportHTML += `<h3>Overall Performance</h3>
+                       <p>Total Sets Produced in ${totalSimHours} hours: <strong>${finishedCount}</strong></p>`;
 
         reportHTML += `
-            <h3>Throughput & Process Analysis</h3>
-            <p><strong>Overall Line Throughput:</strong> ${lineThroughput.toFixed(2)} sets per hour</p>
-            <table><tr><th>Station</th><th>Avg. Utilization</th><th>Idle Time (min)</th><th>Completed Sets</th></tr>`;
+            <h3>Process Analysis</h3>
+            <table><tr><th>Station</th><th>Avg. Utilization</th><th>Total Idle Time (sec)</th></tr>`;
         Object.values(finalStats.stations).forEach(station => {
             let utilClass = 'util-low';
             if (station.utilization > 85) utilClass = 'util-high';
@@ -352,29 +343,28 @@ document.addEventListener('DOMContentLoaded', () => {
             reportHTML += `<tr>
                 <td>${station.name}</td>
                 <td class="${utilClass}">${station.utilization.toFixed(1)}%</td>
-                <td>${(station.idleTime / (1000 * 60)).toFixed(1)}</td>
-                <td>${station.setsProcessed}</td>
+                <td>${(station.idleTime / 1000).toFixed(1)}</td>
             </tr>`;
         });
         reportHTML += `</table>`;
 
         reportHTML += `
             <h3>Buffer Analysis</h3>
-            <table><tr><th>Buffer</th><th>Actual WIP (End)</th></tr>`;
+            <table><tr><th>Buffer</th><th>Avg. WIP</th></tr>`;
         
-        const bufferSource = optimizationResult ? optimizationResult.buffers : null;
-        const bufferIds = ['backlog-buffer', 'building-wip', 'cutting-wip', 'flipping-wip', 'curing-wip', 'finished-goods'];
-
+        const bufferIds = ['building-wip', 'cutting-wip', 'flipping-wip', 'curing-wip', 'backlog-buffer'];
         bufferIds.forEach(id => {
             const name = id.replace(/-wip|-buffer/g, ' ').replace(/^\w/, c => c.toUpperCase()).trim();
-            let actualWIP = 0;
-            if (bufferSource) {
-                actualWIP = bufferSource[id] || 0;
-            } else {
-                const bufferEl = document.getElementById(id);
-                actualWIP = bufferEl ? bufferEl.children.length : 0;
+            let avgWIP = 0;
+            if (optimizationResult) {
+                // For headless optimization, we can only show final WIP, not average over time
+                avgWIP = optimizationResult.buffers[id] || 0;
+            } else if (finalStats.buffers[id]) {
+                const bufferHistory = finalStats.buffers[id].history;
+                const sumWIP = bufferHistory.reduce((a, b) => a + b, 0);
+                avgWIP = sumWIP / bufferHistory.length || 0;
             }
-            reportHTML += `<tr><td>${name}</td><td>${actualWIP}</td></tr>`;
+            reportHTML += `<tr><td>${name}</td><td>${avgWIP.toFixed(2)}</td></tr>`;
         });
         reportHTML += `</table>`;
 
@@ -382,7 +372,8 @@ document.addEventListener('DOMContentLoaded', () => {
         Object.values(finalStats.stations).forEach(station => {
             if (station.utilization > bottleneck.utilization) bottleneck = station;
         });
-        reportHTML += `<hr><h3>Descriptive Analysis</h3><p><strong>Primary Bottleneck:</strong> <strong>${bottleneck.name}</strong></p>`;
+        reportHTML += `<hr><h3>Descriptive Analysis & Suggestions</h3>
+            <p><strong>Primary Bottleneck:</strong> The simulation identifies <strong>${bottleneck.name}</strong> as the primary constraint with ${bottleneck.utilization.toFixed(1)}% utilization.</p>`;
         
         summaryTitleEl.textContent = optimizationResult ? "Optimization Complete" : "Shift Over!";
         summaryContentEl.innerHTML = reportHTML;
@@ -406,4 +397,13 @@ document.addEventListener('DOMContentLoaded', () => {
         function optimizationStep() {
             if (iteration >= maxIterations) {
                 statusDisplay.textContent = "Could not optimize";
-                alert("Optimization could not find a solution 
+                alert("Optimization could not find a solution within a reasonable number of steps.");
+                updateAllControlStates(false);
+                return;
+            }
+
+            let { stats: resultStats, buffers: resultBuffers } = runHeadlessSimulation(optimizedParams);
+            
+            if (resultBuffers['finished-goods'] >= currentParams.backlog) {
+                generateSummaryReport(resultStats, currentParams, { params: optimizedParams, buffers: resultBuffers });
+  
