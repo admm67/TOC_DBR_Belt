@@ -10,68 +10,68 @@
   <h1>TOC Drum Buffer Rope Simulation for Belt Manufacturing</h1>
 
   <!-- Simulation Setup Form -->
-  <form id="simulation-setup-form">
+  <form id="simulation-setup-form" aria-label="Simulation setup form">
     <fieldset>
       <legend>Simulation Settings</legend>
 
       <label>
         Number of Shifts (1-3):
-        <input type="number" id="input-shifts" min="1" max="3" required value="1" />
+        <input type="number" id="input-shifts" name="shifts" min="1" max="3" required value="1" />
       </label>
 
       <label>
         Building Machines:
-        <input type="number" id="input-building" min="1" required value="1" />
+        <input type="number" id="input-building" name="building" min="1" required value="1" />
       </label>
 
       <label>
         Cutting Machines:
-        <input type="number" id="input-cutting" min="1" required value="1" />
+        <input type="number" id="input-cutting" name="cutting" min="1" required value="1" />
       </label>
 
       <label>
         Flipping Machines:
-        <input type="number" id="input-flipping" min="1" required value="2" />
+        <input type="number" id="input-flipping" name="flipping" min="1" required value="2" />
       </label>
 
       <label>
         Curing Machines:
-        <input type="number" id="input-curing" min="1" required value="4" />
+        <input type="number" id="input-curing" name="curing" min="1" required value="4" />
       </label>
 
       <label>
         Coding Machines:
-        <input type="number" id="input-coding" min="1" required value="1" />
+        <input type="number" id="input-coding" name="coding" min="1" required value="1" />
       </label>
 
       <label>
         Backlog Volume:
-        <input type="number" id="input-backlog" min="1" required value="100" />
+        <input type="number" id="input-backlog" name="backlog" min="1" required value="100" />
       </label>
 
       <button type="submit" id="start-simulation" disabled>Start Simulation</button>
 
-      <div id="input-error-message" style="color: red; margin-top: 10px;"></div>
+      <div id="input-error-message" role="alert" aria-live="assertive" style="color: red; margin-top: 10px;"></div>
     </fieldset>
   </form>
 
   <!-- Simulation Controls -->
-  <div class="controls">
+  <div class="controls" role="region" aria-label="Simulation controls">
     <button id="pause-simulation" disabled>Pause</button>
     <button id="resume-simulation" disabled>Resume</button>
     <button id="fast-forward-simulation" disabled>Fast Forward (x1)</button>
     <button id="reset-wip" disabled>Reset</button>
   </div>
 
-  <div id="simulation-status-bar">
+  <div id="simulation-status-bar" aria-live="polite" aria-atomic="true">
     <span id="clock-display">00:00:00</span>
     <span id="status-display">Idle</span>
   </div>
 
-  <div id="stations-wrapper"></div>
+  <div id="stations-wrapper" role="region" aria-label="Stations and buffers"></div>
 
   <!-- Summary Modal -->
-  <div id="summary-report" class="hidden" role="dialog" aria-modal="true" aria-labelledby="summary-title">
+  <div id="summary-report" class="hidden" role="dialog" aria-modal="true" aria-labelledby="summary-title" tabindex="-1">
     <div class="summary-modal-content">
       <h2 id="summary-title">Simulation Summary Report</h2>
       <div id="summary-content"></div>
