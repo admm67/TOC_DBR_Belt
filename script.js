@@ -98,70 +98,79 @@ document.addEventListener('DOMContentLoaded', () => {
         updateAllControlStates(true);
     }
     
-    // --- HEADLESS SIMULATION ENGINE FOR OPTIMIZATION ---
     function runHeadlessSimulation(params) {
-        const localConfig = JSON.parse(JSON.stringify(activeConfig)); // Deep copy
-        localConfig.stations.Building.capacity = params.building;
-        localConfig.stations.Cutting.capacity = params.cutting;
-        localConfig.stations.Flipping.capacity = params.flipping;
-        localConfig.stations.Curing.capacity = params.curing;
-        localConfig.stations.Coding.capacity = params.coding;
-        
+        const localConfig = JSON.parse(JSON.stringify(activeConfig));
+        const stationConfigs = {
+            Building: { capacity: params.building, time: 379.2 },
+            Cutting:  { capacity: params.cutting, time: 240 },
+            Flipping: { capacity: params.flipping, time: 600 },
+            Curing:   { capacity: params.curing, time: 1596, breakCapacity: Math.ceil(params.curing / 2) },
+            Coding:   { capacity: params.coding, time: 496.2 }
+        };
+
         const buffers = {
             'backlog-buffer': params.backlog, 'building-wip': 0, 'cutting-wip': 0,
             'flipping-wip': 0, 'curing-wip': 0, 'finished-goods': 0
         };
         const stations = {};
         const localStats = { stations: {} };
-        Object.values(localConfig.stations).forEach(s => {
-            stations[s.id] = Array(s.capacity).fill(0); // Timers for each slot
-            localStats.stations[s.id] = { id: s.id, name: s.name, setsProcessed: 0, idleTime: 0, workingTime: 0, utilization: 0 };
+
+        Object.keys(localConfig.stations).forEach(id => {
+            stations[id] = Array(stationConfigs[id].capacity).fill(0);
+            localStats.stations[id] = { id: id, name: localConfig.stations[id].name, setsProcessed: 0, idleTime: 0, workingTime: 0, utilization: 0 };
         });
 
-        const tick = 1000; // 1 second ticks
+        const tick = 1000;
         for (let time = 0; time < localConfig.shiftDetails.duration; time += tick) {
             const currentBreak = localConfig.shiftDetails.breaks.find(b => time >= b.start && time < b.end);
 
-            Object.values(localConfig.stations).forEach(s => {
-                // Process completions
-                stations[s.id] = stations[s.id].map(timer => {
+            Object.entries(localConfig.stations).forEach(([id, s]) => {
+                stations[id] = stations[id].map(timer => {
                     if (timer > 0) {
                         timer -= tick;
                         if (timer <= 0) {
                             buffers[s.outputBuffer]++;
-                            localStats.stations[s.id].setsProcessed++;
+                            localStats.stations[id].setsProcessed++;
                             return 0;
                         }
                     }
                     return timer;
                 });
 
-                // Start new items
-                let isPaused = currentBreak && s.id !== 'Curing';
-                let currentCapacity = s.capacity;
-                if (currentBreak && s.id === 'Curing') currentCapacity = s.breakCapacity;
+                let isPaused = currentBreak && id !== 'Curing';
+                let currentCapacity = stationConfigs[id].capacity;
+                if (currentBreak && id === 'Curing') currentCapacity = stationConfigs[id].breakCapacity;
+                
+                stations[id].length = currentCapacity; // Adjust capacity on the fly
+                stations[id].fill(0, stations[id].findIndex(t => t===0) || 0);
+
 
                 if (!isPaused) {
-                    let freeSlots = stations[s.id].filter(t => t === 0).length;
+                    let freeSlots = stations[id].filter(t => t === 0).length;
                     if (buffers[s.inputBuffer] > 0 && freeSlots > 0) {
                         const itemsToProcess = Math.min(buffers[s.inputBuffer], freeSlots);
                         buffers[s.inputBuffer] -= itemsToProcess;
                         for (let i = 0; i < itemsToProcess; i++) {
-                            const emptySlotIndex = stations[s.id].findIndex(t => t === 0);
+                            const emptySlotIndex = stations[id].findIndex(t => t === 0);
                             if (emptySlotIndex !== -1) {
-                                stations[s.id][emptySlotIndex] = s.time * 1000;
+                                stations[id][emptySlotIndex] = stationConfigs[id].time * 1000;
                             }
                         }
                     } else if (buffers[s.inputBuffer] === 0) {
-                         localStats.stations[s.id].idleTime += tick * freeSlots;
+                         localStats.stations[id].idleTime += tick * freeSlots;
                     }
                 }
             });
         }
-        return calculateStats(localStats, localConfig);
+
+        const finalConfig = { ...localConfig, stations: {} };
+        Object.keys(localConfig.stations).forEach(id => {
+            finalConfig.stations[id] = { ...localConfig.stations[id], ...stationConfigs[id] };
+        });
+
+        return calculateStats(localStats, finalConfig);
     }
 
-    // --- CONTROLS ---
     function pauseSimulation() {
         clearInterval(simulationInterval);
         clearInterval(dashboardInterval);
@@ -229,7 +238,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!isPaused && freeCapacity > 0) {
                 const inputBufferEl = document.getElementById(stationConfig.inputBuffer);
                 if(inputBufferEl.children.length > 0) {
-                    startProcessing(inputBufferEl.firstElementChild, stationConfig.id, stationConfig);
+                    for (let i = 0; i < freeCapacity; i++) {
+                        if (inputBufferEl.children.length > 0) {
+                            startProcessing(inputBufferEl.firstElementChild, stationConfig.id, stationConfig);
+                        }
+                    }
                 } else {
                     stats.stations[stationConfig.id].idleTime += (200 * activeConfig.timeScale * freeCapacity);
                 }
@@ -257,6 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function endSimulation() {
         pauseSimulation();
         updateAllControlStates(false);
+        calculateStats(stats, activeConfig);
         generateSummaryReport(stats, currentParams);
     }
 
@@ -294,7 +308,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function generateSummaryReport(finalStats, params, optimizationResult = null) {
-        const finishedCount = finalStats.stations.Coding.setsProcessed;
         let reportHTML = `<h3>Original Configuration</h3>
             <table>
                 <tr><td>Shifts: ${params.shifts}</td><td>Backlog: ${params.backlog}</td></tr>
@@ -333,24 +346,35 @@ document.addEventListener('DOMContentLoaded', () => {
         summaryReportEl.classList.remove('hidden');
     }
     
-    async function runOptimization() {
+    // --- CORRECTED OPTIMIZATION LOGIC ---
+    function runOptimization() {
         const params = getSimulationParameters();
         if (!params) return;
 
         setupSimulation(params);
         statusDisplay.textContent = "Optimizing...";
+        updateAllControlStates(true); // Disable buttons during optimization
+
         let optimizedParams = { ...params };
         let iteration = 0;
         const maxIterations = 25;
 
-        while(iteration < maxIterations) {
+        function optimizationStep() {
+            if (iteration >= maxIterations) {
+                statusDisplay.textContent = "Could not optimize";
+                alert("Optimization could not find a solution within a reasonable number of steps. The system may be too constrained.");
+                updateAllControlStates(false);
+                return;
+            }
+
             let resultStats = runHeadlessSimulation(optimizedParams);
             const finishedCount = resultStats.stations.Coding.setsProcessed;
 
             if (finishedCount >= params.backlog) {
                 generateSummaryReport(resultStats, params, { params: optimizedParams });
                 statusDisplay.textContent = "Optimization Found";
-                return;
+                updateAllControlStates(false);
+                return; 
             }
 
             let bottleneck = { utilization: -1, id: null };
@@ -361,16 +385,20 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!bottleneck.id) {
                  alert("Could not determine bottleneck. Check simulation logic.");
                  statusDisplay.textContent = "Error";
+                 updateAllControlStates(false);
                  return;
             }
             
             const key = bottleneck.id.toLowerCase();
-            optimizedParams[key]++;
+            if (optimizedParams.hasOwnProperty(key)) {
+                optimizedParams[key]++;
+            }
             iteration++;
+            
+            setTimeout(optimizationStep, 50);
         }
         
-        statusDisplay.textContent = "Could not optimize";
-        alert("Optimization could not find a solution within a reasonable number of steps. The system may be too constrained.");
+        optimizationStep();
     }
 
     // --- Event Listeners ---
