@@ -1,50 +1,84 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>DBR Simulation with Shift Management (Controls)</title>
-    <link rel="stylesheet" href="style.css"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TOC DBR Belt Manufacturing Simulation</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-    <h1>DBR Simulation with Shift Management (Controls)</h1>
-    <div class="controls">
-        <button id="start-simulation">Start New Simulation</button>
-        <button id="pause-simulation" disabled>Pause</button>
-        <button id="resume-simulation" disabled>Resume</button>
-        <button id="fast-forward-simulation" disabled>Fast Forward (x1)</button>
-        <button id="reset-wip" disabled>Reset WIP</button>
+  <h1>TOC Drum Buffer Rope Simulation for Belt Manufacturing</h1>
+
+  <!-- Simulation Setup Form (replaces prompt) -->
+  <form id="simulation-setup-form">
+    <fieldset>
+      <legend>Simulation Settings</legend>
+
+      <label>
+        Number of Shifts (1-3):
+        <input type="number" id="input-shifts" min="1" max="3" required value="1" />
+      </label>
+
+      <label>
+        Building Machines:
+        <input type="number" id="input-building" min="1" required value="1" />
+      </label>
+
+      <label>
+        Cutting Machines:
+        <input type="number" id="input-cutting" min="1" required value="1" />
+      </label>
+
+      <label>
+        Flipping Machines:
+        <input type="number" id="input-flipping" min="1" required value="2" />
+      </label>
+
+      <label>
+        Curing Machines:
+        <input type="number" id="input-curing" min="1" required value="4" />
+      </label>
+
+      <label>
+        Coding Machines:
+        <input type="number" id="input-coding" min="1" required value="1" />
+      </label>
+
+      <label>
+        Backlog Volume:
+        <input type="number" id="input-backlog" min="1" required value="100" />
+      </label>
+
+      <button type="submit" id="start-simulation" disabled>Start Simulation</button>
+
+      <div id="input-error-message" style="color: red; margin-top: 10px;"></div>
+    </fieldset>
+  </form>
+
+  <!-- Simulation Controls -->
+  <div class="controls">
+    <button id="pause-simulation" disabled>Pause</button>
+    <button id="resume-simulation" disabled>Resume</button>
+    <button id="fast-forward-simulation" disabled>Fast Forward (x1)</button>
+    <button id="reset-wip" disabled>Reset</button>
+  </div>
+
+  <div id="simulation-status-bar">
+    <span id="clock-display">00:00:00</span>
+    <span id="status-display">Idle</span>
+  </div>
+
+  <div id="stations-wrapper"></div>
+
+  <!-- Summary Modal -->
+  <div id="summary-report" class="hidden" role="dialog" aria-modal="true" aria-labelledby="summary-title">
+    <div class="summary-modal-content">
+      <h2 id="summary-title">Simulation Summary Report</h2>
+      <div id="summary-content"></div>
+      <button id="close-summary" aria-label="Close Summary Report">Close</button>
     </div>
-    <div id="simulation-status-bar">
-        <div>Shift Time: <span id="clock-display">00:00:00</span></div>
-        <div>Status: <span id="status-display">Idle</span></div>
-    </div>
-    <div id="simulation-container">
-        <div class="station-container">
-            <h2>Backlog</h2>
-            <div class="wip-buffer" id="backlog-buffer"></div>
-            <div class="stats-display" id="backlog-buffer-stats">
-                <div>WIP: <span class="wip-current">0</span></div>
-                <div>Avg WIP: <span class="wip-avg">0.0</span></div>
-            </div>
-        </div>
-        <div id="stations-wrapper"></div>
-        <div class="station-container">
-            <h2>Finished</h2>
-            <div class="wip-buffer" id="finished-goods"></div>
-            <div class="stats-display" id="finished-goods-stats">
-                <div>Total Out: <span class="finished-total">0</span></div>
-            </div>
-        </div>
-    </div>
-    <!-- Summary Report Container -->
-    <div id="summary-report" class="hidden">
-        <div class="summary-modal-content">
-            <h2>Shift Over!</h2>
-            <div id="summary-content"></div>
-            <button id="close-summary">Close</button>
-        </div>
-    </div>
-    <script src="script.js"></script>
+  </div>
+
+  <script src="script.js"></script>
 </body>
 </html>
