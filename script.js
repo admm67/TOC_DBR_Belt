@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let simulationTime = 0;
     let stats = {};
     let activeConfig = {};
-    let currentParams = {}; // FIX: To store the last used configuration
+    let currentParams = {}; // To store the last used configuration
     let currentSpeedMultiplier = 1;
 
     function getSimulationParameters() {
@@ -131,7 +131,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         timer -= tick;
                         if (timer <= 0) {
                             buffers[s.outputBuffer]++;
-                            localStats.stations[id].setsProcessed++;
                             return 0;
                         }
                     }
@@ -154,6 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             const emptySlotIndex = stations[id].findIndex(t => t === 0);
                             if (emptySlotIndex !== -1) {
                                 stations[id][emptySlotIndex] = stationConfigs[id].time * 1000;
+                                localStats.stations[id].setsProcessed++;
                             }
                         }
                     } else if (buffers[s.inputBuffer] === 0) {
@@ -168,7 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
             finalConfig.stations[id] = { ...localConfig.stations[id], ...stationConfigs[id] };
         });
 
-        return calculateStats(localStats, finalConfig);
+        return { stats: calculateStats(localStats, finalConfig), buffers: buffers };
     }
 
     function pauseSimulation() {
@@ -248,6 +248,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
+        
+        const currentHour = Math.floor(simulationTime / (3600 * 1000));
+        if (currentHour < stats.hourlyOutput.length) {
+            stats.hourlyOutput[currentHour] = document.getElementById('finished-goods').children.length;
+        }
 
         if (simulationTime >= activeConfig.shiftDetails.duration) {
             endSimulation();
@@ -257,8 +262,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function startProcessing(set, stationId, stationConfig) {
         const stationEl = document.getElementById(stationId);
         stationEl.appendChild(set);
-        stats.stations[stationId].setsProcessed++;
         set.classList.add('processing');
+        stats.stations[stationId].setsProcessed++;
         const processTimeInRealMs = (stationConfig.time * 1000) / activeConfig.timeScale;
         setTimeout(() => {
             const outputBufferEl = document.getElementById(stationConfig.outputBuffer);
@@ -307,19 +312,21 @@ document.addEventListener('DOMContentLoaded', () => {
         return activeConfig.shiftDetails.breaks.find(b => time >= b.start && time < b.end) || null;
     }
 
-    // --- FIX: Restored detailed summary report ---
     function generateSummaryReport(finalStats, params, optimizationResult = null) {
-        const finishedCount = finalStats.stations.Coding.setsProcessed;
+        const finishedCount = optimizationResult ? optimizationResult.buffers['finished-goods'] : document.getElementById('finished-goods').children.length;
         const totalSimHours = params.shifts * 8;
         const lineThroughput = finishedCount / totalSimHours;
 
         let reportHTML = `
             <h3>Configuration Used</h3>
             <table>
-                <tr><td>Shifts: ${params.shifts}</td><td>Backlog: ${params.backlog}</td></tr>
-                <tr><td>Building: ${params.building}</td><td>Cutting: ${params.cutting}</td></tr>
-                <tr><td>Flipping: ${params.flipping}</td><td>Curing: ${params.curing}</td></tr>
-                <tr><td>Coding: ${params.coding}</td><td></td></tr>
+                <tr><th>Parameter</th><th>Value</th></tr>
+                <tr><td>Number of Shifts</td><td>${params.shifts}</td></tr>
+                <tr><td>Building Machines</td><td>${params.building}</td></tr>
+                <tr><td>Cutting Machines</td><td>${params.cutting}</td></tr>
+                <tr><td>Flipping Machines</td><td>${params.flipping}</td></tr>
+                <tr><td>Curing Machines</td><td>${params.curing}</td></tr>
+                <tr><td>Coding Machines</td><td>${params.coding}</td></tr>
             </table>`;
         
         if (optimizationResult) {
@@ -333,7 +340,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <tr><td>Coding</td><td>${optimizationResult.params.coding}</td></tr>
             </table>`;
         }
-        
+
         reportHTML += `
             <h3>Throughput & Process Analysis</h3>
             <p><strong>Overall Line Throughput:</strong> ${lineThroughput.toFixed(2)} sets per hour</p>
@@ -351,6 +358,26 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         reportHTML += `</table>`;
 
+        reportHTML += `
+            <h3>Buffer Analysis</h3>
+            <table><tr><th>Buffer</th><th>Actual WIP (End)</th></tr>`;
+        
+        const bufferSource = optimizationResult ? optimizationResult.buffers : null;
+        const bufferIds = ['backlog-buffer', 'building-wip', 'cutting-wip', 'flipping-wip', 'curing-wip', 'finished-goods'];
+
+        bufferIds.forEach(id => {
+            const name = id.replace(/-wip|-buffer/g, ' ').replace(/^\w/, c => c.toUpperCase()).trim();
+            let actualWIP = 0;
+            if (bufferSource) {
+                actualWIP = bufferSource[id] || 0;
+            } else {
+                const bufferEl = document.getElementById(id);
+                actualWIP = bufferEl ? bufferEl.children.length : 0;
+            }
+            reportHTML += `<tr><td>${name}</td><td>${actualWIP}</td></tr>`;
+        });
+        reportHTML += `</table>`;
+
         let bottleneck = { utilization: -1, name: 'N/A' };
         Object.values(finalStats.stations).forEach(station => {
             if (station.utilization > bottleneck.utilization) bottleneck = station;
@@ -363,7 +390,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function runOptimization() {
-        // --- FIX: Use currentParams instead of re-prompting ---
         if (!currentParams || Object.keys(currentParams).length === 0) {
             alert("Please run a simulation first to set a base configuration for optimization.");
             return;
@@ -380,35 +406,4 @@ document.addEventListener('DOMContentLoaded', () => {
         function optimizationStep() {
             if (iteration >= maxIterations) {
                 statusDisplay.textContent = "Could not optimize";
-                alert("Optimization could not find a solution within a reasonable number of steps. The system may be too constrained.");
-                updateAllControlStates(false);
-                return;
-            }
-
-            let resultStats = runHeadlessSimulation(optimizedParams);
-            const finishedCount = resultStats.stations.Coding.setsProcessed;
-
-            if (finishedCount >= currentParams.backlog) {
-                generateSummaryReport(resultStats, currentParams, { params: optimizedParams });
-                statusDisplay.textContent = "Optimization Found";
-                updateAllControlStates(false);
-                return; 
-            }
-
-            let bottleneck = { utilization: -1, id: null };
-            Object.values(resultStats.stations).forEach(station => {
-                if(station.utilization > bottleneck.utilization) bottleneck = station;
-            });
-
-            if (!bottleneck.id) {
-                 alert("Could not determine bottleneck. Check simulation logic.");
-                 statusDisplay.textContent = "Error";
-                 updateAllControlStates(false);
-                 return;
-            }
-            
-            const key = bottleneck.id.toLowerCase();
-            if (optimizedParams.hasOwnProperty(key)) {
-                optimizedParams[key]++;
-            }
-          
+                alert("Optimization could not find a solution 
