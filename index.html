@@ -59,15 +59,17 @@
   <div class="controls" role="region" aria-label="Simulation controls">
     <button id="pause-simulation" disabled>Pause</button>
     <button id="resume-simulation" disabled>Resume</button>
-    <button id="fast-forward-simulation" disabled>Fast Forward (x1)</button>
+    <button id="fast-forward-simulation" disabled>Fast Forward (x60)</button>
     <button id="reset-wip" disabled>Reset</button>
   </div>
 
+  <!-- Simulation Status -->
   <div id="simulation-status-bar" aria-live="polite" aria-atomic="true">
     <span id="clock-display">00:00:00</span>
     <span id="status-display">Idle</span>
   </div>
 
+  <!-- Stations and Buffers -->
   <div id="stations-wrapper" role="region" aria-label="Stations and buffers"></div>
 
   <!-- Summary Modal -->
