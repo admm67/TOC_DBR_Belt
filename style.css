@@ -34,6 +34,7 @@ h1 {
     color: #626e7b;
     cursor: not-allowed;
 }
+#optimize-configuration { background: #9c27b0; color: white; }
 #pause-simulation { background: #ffc107; color: #212529; }
 #resume-simulation { background: #28a745; color: #fff; }
 #fast-forward-simulation { background: #17a2b8; color: #fff; }
@@ -134,11 +135,12 @@ h1 {
     position: fixed;
     top: 0; left: 0;
     width: 100vw; height: 100vh;
-    background: #fff !important;   /* Opaque white overlay for full readability */
+    background: rgba(0,0,0,0.4);
     z-index: 900;
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 10px;
 }
 #summary-report.hidden { display: none; }
 .summary-modal-content {
@@ -146,20 +148,22 @@ h1 {
     border-radius: 13px;
     box-shadow: 0 4px 20px rgba(30,30,50,0.13);
     width: 98vw;
-    max-width: 500px;
+    max-width: 600px;
     margin: auto;
-    padding: 17px 12px 24px 12px;
+    padding: 17px 20px 24px 20px;
     text-align: left;
     font-size: 1em;
+    max-height: 90vh;
+    overflow-y: auto;
 }
 #summary-content h3 { border-bottom: 1px solid #eaebec; padding-bottom: 5px; margin-top: 19px; margin-bottom: 4px;}
 #summary-content p { margin: 5px 0; line-height: 1.5;}
 #summary-content table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.98em;}
-#summary-content th, #summary-content td { border: 1px solid #e0e2e9; padding: 6px 2px; text-align: center;}
+#summary-content th, #summary-content td { border: 1px solid #e0e2e9; padding: 7px; text-align: center;}
 #summary-content th { background: #f3f6fa; }
 #close-summary {
     display: block;
-    margin: 12px auto 0 auto;
+    margin: 20px auto 0 auto;
     font-size: 15px;
     padding: 8px 22px;
     cursor: pointer;
@@ -167,19 +171,8 @@ h1 {
     background: #e8eaed;
     border-radius: 6px;
 }
-@media (max-width: 650px) {
-    .summary-modal-content, #summary-report {
-        width: 99vw;
-        max-width: 99vw;
-    }
-    body {
-        padding: 2px 1px 42px 1px;
-    }
-    #simulation-status-bar {
-        padding: 6px 0;
-        font-size: 0.98em;
-    }
-    .station-container {
-        padding: 5px 2px;
-    }
-}
+
+/* Utilization Color Coding */
+.util-high { background-color: #f8d7da; color: #721c24; }
+.util-medium { background-color: #fff3cd; color: #856404; }
+.util-low { background-color: #d4edda; color: #155724; }
