@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let simulationTime = 0;
     let stats = {};
     let activeConfig = {};
-    let currentParams = {};
+    let currentParams = {}; // FIX: To store the last used configuration
     let currentSpeedMultiplier = 1;
 
     function getSimulationParameters() {
@@ -36,7 +36,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isNaN(shifts) || isNaN(backlog) || isNaN(building) || isNaN(cutting) || isNaN(flipping) || isNaN(curing) || isNaN(coding)) {
             return null;
         }
-        return { shifts, backlog, building, cutting, flipping, curing, coding };
+        currentParams = { shifts, backlog, building, cutting, flipping, curing, coding };
+        return currentParams;
     }
 
     function setupSimulation(params) {
@@ -141,9 +142,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 let currentCapacity = stationConfigs[id].capacity;
                 if (currentBreak && id === 'Curing') currentCapacity = stationConfigs[id].breakCapacity;
                 
-                stations[id].length = currentCapacity; // Adjust capacity on the fly
+                stations[id].length = currentCapacity;
                 stations[id].fill(0, stations[id].findIndex(t => t===0) || 0);
-
 
                 if (!isPaused) {
                     let freeSlots = stations[id].filter(t => t === 0).length;
@@ -307,14 +307,21 @@ document.addEventListener('DOMContentLoaded', () => {
         return activeConfig.shiftDetails.breaks.find(b => time >= b.start && time < b.end) || null;
     }
 
+    // --- FIX: Restored detailed summary report ---
     function generateSummaryReport(finalStats, params, optimizationResult = null) {
-        let reportHTML = `<h3>Original Configuration</h3>
+        const finishedCount = finalStats.stations.Coding.setsProcessed;
+        const totalSimHours = params.shifts * 8;
+        const lineThroughput = finishedCount / totalSimHours;
+
+        let reportHTML = `
+            <h3>Configuration Used</h3>
             <table>
                 <tr><td>Shifts: ${params.shifts}</td><td>Backlog: ${params.backlog}</td></tr>
                 <tr><td>Building: ${params.building}</td><td>Cutting: ${params.cutting}</td></tr>
                 <tr><td>Flipping: ${params.flipping}</td><td>Curing: ${params.curing}</td></tr>
                 <tr><td>Coding: ${params.coding}</td><td></td></tr>
             </table>`;
+        
         if (optimizationResult) {
              reportHTML += `<h3>Optimized Configuration</h3>
              <p>Recommended to complete the full backlog of ${params.backlog} sets.</p>
@@ -326,12 +333,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 <tr><td>Coding</td><td>${optimizationResult.params.coding}</td></tr>
             </table>`;
         }
-        reportHTML += `<h3>Process Analysis</h3><table><tr><th>Station</th><th>Avg. Utilization</th><th>Completed Sets</th></tr>`;
+        
+        reportHTML += `
+            <h3>Throughput & Process Analysis</h3>
+            <p><strong>Overall Line Throughput:</strong> ${lineThroughput.toFixed(2)} sets per hour</p>
+            <table><tr><th>Station</th><th>Avg. Utilization</th><th>Idle Time (min)</th><th>Completed Sets</th></tr>`;
         Object.values(finalStats.stations).forEach(station => {
             let utilClass = 'util-low';
             if (station.utilization > 85) utilClass = 'util-high';
             else if (station.utilization > 50) utilClass = 'util-medium';
-            reportHTML += `<tr><td>${station.name}</td><td class="${utilClass}">${station.utilization.toFixed(1)}%</td><td>${station.setsProcessed}</td></tr>`;
+            reportHTML += `<tr>
+                <td>${station.name}</td>
+                <td class="${utilClass}">${station.utilization.toFixed(1)}%</td>
+                <td>${(station.idleTime / (1000 * 60)).toFixed(1)}</td>
+                <td>${station.setsProcessed}</td>
+            </tr>`;
         });
         reportHTML += `</table>`;
 
@@ -346,16 +362,18 @@ document.addEventListener('DOMContentLoaded', () => {
         summaryReportEl.classList.remove('hidden');
     }
     
-    // --- CORRECTED OPTIMIZATION LOGIC ---
     function runOptimization() {
-        const params = getSimulationParameters();
-        if (!params) return;
+        // --- FIX: Use currentParams instead of re-prompting ---
+        if (!currentParams || Object.keys(currentParams).length === 0) {
+            alert("Please run a simulation first to set a base configuration for optimization.");
+            return;
+        }
 
-        setupSimulation(params);
+        setupSimulation(currentParams);
         statusDisplay.textContent = "Optimizing...";
-        updateAllControlStates(true); // Disable buttons during optimization
+        updateAllControlStates(true); 
 
-        let optimizedParams = { ...params };
+        let optimizedParams = { ...currentParams };
         let iteration = 0;
         const maxIterations = 25;
 
@@ -370,8 +388,8 @@ document.addEventListener('DOMContentLoaded', () => {
             let resultStats = runHeadlessSimulation(optimizedParams);
             const finishedCount = resultStats.stations.Coding.setsProcessed;
 
-            if (finishedCount >= params.backlog) {
-                generateSummaryReport(resultStats, params, { params: optimizedParams });
+            if (finishedCount >= currentParams.backlog) {
+                generateSummaryReport(resultStats, currentParams, { params: optimizedParams });
                 statusDisplay.textContent = "Optimization Found";
                 updateAllControlStates(false);
                 return; 
@@ -393,22 +411,4 @@ document.addEventListener('DOMContentLoaded', () => {
             if (optimizedParams.hasOwnProperty(key)) {
                 optimizedParams[key]++;
             }
-            iteration++;
-            
-            setTimeout(optimizationStep, 50);
-        }
-        
-        optimizationStep();
-    }
-
-    // --- Event Listeners ---
-    startButton.addEventListener('click', () => {
-        const params = getSimulationParameters();
-        if(params) startVisualSimulation(params);
-    });
-    optimizeButton.addEventListener('click', runOptimization);
-    pauseButton.addEventListener('click', pauseSimulation);
-    resumeButton.addEventListener('click', resumeSimulation);
-    ffButton.addEventListener('click', fastForward);
-    closeSummaryButton.addEventListener('click', () => summaryReportEl.classList.add('hidden'));
-});
+          
