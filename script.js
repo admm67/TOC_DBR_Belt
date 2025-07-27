@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const clockDisplay = document.getElementById('clock-display');
     const statusDisplay = document.getElementById('status-display');
 
+    // --- Simulation State ---
     let simulationInterval = null;
     let dashboardInterval = null;
     let setCounter = 0;
@@ -32,6 +33,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const curing = parseInt(prompt("Enter number of Curing machines:", "4")) || 4;
         const coding = parseInt(prompt("Enter number of Coding machines:", "1")) || 1;
 
+        if (isNaN(shifts) || isNaN(backlog) || isNaN(building) || isNaN(cutting) || isNaN(flipping) || isNaN(curing) || isNaN(coding)) {
+            return null;
+        }
         return { shifts, backlog, building, cutting, flipping, curing, coding };
     }
 
@@ -39,7 +43,6 @@ document.addEventListener('DOMContentLoaded', () => {
         currentParams = params;
         currentSpeedMultiplier = 1;
         ffButton.textContent = `Fast Forward (x1)`;
-        resetButton.disabled = false;
 
         activeConfig = {
             timeScale: 60,
@@ -77,111 +80,100 @@ document.addEventListener('DOMContentLoaded', () => {
         stats.buffers['backlog-buffer'] = { history: [], avg: 0 };
     }
 
-    function startSimulation(params, isOptimization = false) {
-        return new Promise(resolve => {
-            pauseSimulation();
-            summaryReportEl.classList.add('hidden');
-            simulationTime = 0;
-            setCounter = 0;
+    function startVisualSimulation(params) {
+        pauseSimulation();
+        summaryReportEl.classList.add('hidden');
+        simulationTime = 0;
+        setCounter = 0;
 
-            setupSimulation(params);
+        setupSimulation(params);
 
-            const backlogBuffer = document.getElementById('backlog-buffer');
-            backlogBuffer.innerHTML = '';
-            for (let i = 0; i < params.backlog; i++) {
-                backlogBuffer.appendChild(createVbeltSet());
-            }
-
-            if (isOptimization) {
-                // Run instantly without visual updates for optimization
-                while(simulationTime < activeConfig.shiftDetails.duration) {
-                    simulationTick(true);
-                }
-                endSimulation(true);
-                resolve(stats);
-            } else {
-                resumeSimulation();
-                startButton.disabled = true;
-                optimizeButton.disabled = true;
-            }
-        });
-    }
-
-    function simulationTick(isOptimization = false) {
-        const tickDuration = isOptimization ? (200 * activeConfig.timeScale) : (200 * activeConfig.timeScale);
-        simulationTime += tickDuration;
-
-        Object.values(activeConfig.stations).forEach(stationConfig => {
-            const setsInStation = document.getElementById(stationConfig.id).children.length;
-            if(stationConfig.timeoutIds && stationConfig.timeoutIds.length > setsInStation) {
-                 stationConfig.timeoutIds.length = setsInStation;
-            }
-
-            const currentBreak = checkForBreak(simulationTime);
-            let currentCapacity = stationConfig.capacity;
-            const isPaused = currentBreak && (stationConfig.id !== 'Curing');
-            if (currentBreak && stationConfig.id === 'Curing') currentCapacity = stationConfig.breakCapacity;
-
-            const freeCapacity = currentCapacity - setsInStation;
-
-            if (!isPaused && freeCapacity > 0) {
-                const inputBufferEl = document.getElementById(stationConfig.inputBuffer);
-                if(inputBufferEl.children.length > 0) {
-                    for(let i=0; i<freeCapacity; ++i) {
-                        if(inputBufferEl.children.length > 0) {
-                             startProcessing(inputBufferEl.firstElementChild, stationConfig.id, stationConfig, isOptimization);
-                        }
-                    }
-                } else {
-                    stats.stations[stationConfig.id].idleTime += (tickDuration * freeCapacity);
-                }
-            }
-        });
-
-        if (!isOptimization) {
-            const currentHour = Math.floor(simulationTime / (3600 * 1000));
-            if (currentHour < stats.hourlyOutput.length) {
-                stats.hourlyOutput[currentHour] = document.getElementById('finished-goods').children.length;
-            }
+        const backlogBuffer = document.getElementById('backlog-buffer');
+        backlogBuffer.innerHTML = '';
+        for (let i = 0; i < params.backlog; i++) {
+            backlogBuffer.appendChild(createVbeltSet());
         }
-
-        if (simulationTime >= activeConfig.shiftDetails.duration) {
-            endSimulation(isOptimization);
-        }
-    }
-
-    function startProcessing(set, stationId, stationConfig, isOptimization) {
-        const stationEl = document.getElementById(stationId);
-        stationEl.appendChild(set);
-        stats.stations[stationId].setsProcessed++;
-
-        if (isOptimization) {
-            const outputBufferEl = document.getElementById(stationConfig.outputBuffer);
-            if (outputBufferEl) outputBufferEl.appendChild(set);
-        } else {
-            set.classList.add('processing');
-            const processTimeInRealMs = (stationConfig.time * 1000) / activeConfig.timeScale;
-            setTimeout(() => {
-                const outputBufferEl = document.getElementById(stationConfig.outputBuffer);
-                if (outputBufferEl) outputBufferEl.appendChild(set);
-                set.classList.remove('processing');
-            }, processTimeInRealMs / currentSpeedMultiplier);
-        }
+        
+        resumeSimulation();
+        updateAllControlStates(true);
     }
     
+    // --- HEADLESS SIMULATION ENGINE FOR OPTIMIZATION ---
+    function runHeadlessSimulation(params) {
+        const localConfig = JSON.parse(JSON.stringify(activeConfig)); // Deep copy
+        localConfig.stations.Building.capacity = params.building;
+        localConfig.stations.Cutting.capacity = params.cutting;
+        localConfig.stations.Flipping.capacity = params.flipping;
+        localConfig.stations.Curing.capacity = params.curing;
+        localConfig.stations.Coding.capacity = params.coding;
+        
+        const buffers = {
+            'backlog-buffer': params.backlog, 'building-wip': 0, 'cutting-wip': 0,
+            'flipping-wip': 0, 'curing-wip': 0, 'finished-goods': 0
+        };
+        const stations = {};
+        const localStats = { stations: {} };
+        Object.values(localConfig.stations).forEach(s => {
+            stations[s.id] = Array(s.capacity).fill(0); // Timers for each slot
+            localStats.stations[s.id] = { id: s.id, name: s.name, setsProcessed: 0, idleTime: 0, workingTime: 0, utilization: 0 };
+        });
+
+        const tick = 1000; // 1 second ticks
+        for (let time = 0; time < localConfig.shiftDetails.duration; time += tick) {
+            const currentBreak = localConfig.shiftDetails.breaks.find(b => time >= b.start && time < b.end);
+
+            Object.values(localConfig.stations).forEach(s => {
+                // Process completions
+                stations[s.id] = stations[s.id].map(timer => {
+                    if (timer > 0) {
+                        timer -= tick;
+                        if (timer <= 0) {
+                            buffers[s.outputBuffer]++;
+                            localStats.stations[s.id].setsProcessed++;
+                            return 0;
+                        }
+                    }
+                    return timer;
+                });
+
+                // Start new items
+                let isPaused = currentBreak && s.id !== 'Curing';
+                let currentCapacity = s.capacity;
+                if (currentBreak && s.id === 'Curing') currentCapacity = s.breakCapacity;
+
+                if (!isPaused) {
+                    let freeSlots = stations[s.id].filter(t => t === 0).length;
+                    if (buffers[s.inputBuffer] > 0 && freeSlots > 0) {
+                        const itemsToProcess = Math.min(buffers[s.inputBuffer], freeSlots);
+                        buffers[s.inputBuffer] -= itemsToProcess;
+                        for (let i = 0; i < itemsToProcess; i++) {
+                            const emptySlotIndex = stations[s.id].findIndex(t => t === 0);
+                            if (emptySlotIndex !== -1) {
+                                stations[s.id][emptySlotIndex] = s.time * 1000;
+                            }
+                        }
+                    } else if (buffers[s.inputBuffer] === 0) {
+                         localStats.stations[s.id].idleTime += tick * freeSlots;
+                    }
+                }
+            });
+        }
+        return calculateStats(localStats, localConfig);
+    }
+
     // --- CONTROLS ---
     function pauseSimulation() {
         clearInterval(simulationInterval);
         clearInterval(dashboardInterval);
         simulationInterval = null;
         dashboardInterval = null;
-        if(simulationTime > 0 && simulationTime < activeConfig.shiftDetails.duration) {
+        if(activeConfig.shiftDetails && simulationTime > 0 && simulationTime < activeConfig.shiftDetails.duration) {
             updateControlButtons(true);
         }
     }
     function resumeSimulation() {
         if(simulationInterval) return;
-        simulationInterval = setInterval(() => simulationTick(false), 200 / currentSpeedMultiplier);
+        simulationInterval = setInterval(simulationTick, 200 / currentSpeedMultiplier);
         dashboardInterval = setInterval(updateDashboard, 1000 / currentSpeedMultiplier);
         updateControlButtons(false);
     }
@@ -195,8 +187,16 @@ document.addEventListener('DOMContentLoaded', () => {
         pauseButton.disabled = paused;
         resumeButton.disabled = !paused;
         ffButton.disabled = paused;
-        resetButton.disabled = false;
     }
+    function updateAllControlStates(isSimRunning) {
+        startButton.disabled = isSimRunning;
+        optimizeButton.disabled = isSimRunning;
+        pauseButton.disabled = !isSimRunning;
+        resumeButton.disabled = true;
+        ffButton.disabled = !isSimRunning;
+        resetButton.disabled = !isSimRunning;
+    }
+
     resetButton.addEventListener('click', () => {
         ['backlog-buffer', 'building-wip', 'cutting-wip', 'flipping-wip', 'curing-wip', 'finished-goods'].forEach(id => {
             const el = document.getElementById(id);
@@ -213,17 +213,51 @@ document.addEventListener('DOMContentLoaded', () => {
         updateDashboard();
     });
 
-    function endSimulation(isOptimization) {
-        pauseSimulation();
-        if (!isOptimization) {
-            startButton.disabled = false;
-            optimizeButton.disabled = false;
-            pauseButton.disabled = true;
-            resumeButton.disabled = true;
-            ffButton.disabled = true;
-            resetButton.disabled = false;
-            generateSummaryReport(stats, currentParams);
+    function simulationTick() {
+        simulationTime += (200 * activeConfig.timeScale);
+        
+        Object.values(activeConfig.stations).forEach(stationConfig => {
+            const currentBreak = checkForBreak(simulationTime);
+            let currentCapacity = stationConfig.capacity;
+            const isPaused = currentBreak && (stationConfig.id !== 'Curing');
+            if (currentBreak && stationConfig.id === 'Curing') currentCapacity = stationConfig.breakCapacity;
+
+            const stationEl = document.getElementById(stationConfig.id);
+            const setsInStation = stationEl.children.length;
+            const freeCapacity = currentCapacity - setsInStation;
+
+            if (!isPaused && freeCapacity > 0) {
+                const inputBufferEl = document.getElementById(stationConfig.inputBuffer);
+                if(inputBufferEl.children.length > 0) {
+                    startProcessing(inputBufferEl.firstElementChild, stationConfig.id, stationConfig);
+                } else {
+                    stats.stations[stationConfig.id].idleTime += (200 * activeConfig.timeScale * freeCapacity);
+                }
+            }
+        });
+
+        if (simulationTime >= activeConfig.shiftDetails.duration) {
+            endSimulation();
         }
+    }
+
+    function startProcessing(set, stationId, stationConfig) {
+        const stationEl = document.getElementById(stationId);
+        stationEl.appendChild(set);
+        stats.stations[stationId].setsProcessed++;
+        set.classList.add('processing');
+        const processTimeInRealMs = (stationConfig.time * 1000) / activeConfig.timeScale;
+        setTimeout(() => {
+            const outputBufferEl = document.getElementById(stationConfig.outputBuffer);
+            if (outputBufferEl) outputBufferEl.appendChild(set);
+            set.classList.remove('processing');
+        }, processTimeInRealMs / currentSpeedMultiplier);
+    }
+    
+    function endSimulation() {
+        pauseSimulation();
+        updateAllControlStates(false);
+        generateSummaryReport(stats, currentParams);
     }
 
     function createVbeltSet() {
@@ -233,57 +267,44 @@ document.addEventListener('DOMContentLoaded', () => {
         set.innerText = `S${setCounter}`;
         return set;
     }
-
-    function calculateStats(currentStats, config) {
+    
+    function calculateStats(finalStats, config) {
         let totalBreakTime = 0;
-        config.shiftDetails.breaks.forEach(b => {
-             totalBreakTime += (b.end - b.start);
-        });
-
+        config.shiftDetails.breaks.forEach(b => totalBreakTime += (b.end - b.start));
         Object.values(config.stations).forEach(stationConfig => {
-            const stationStats = currentStats.stations[stationConfig.id];
+            const stationStats = finalStats.stations[stationConfig.id];
+            if(!stationStats) return;
             let availableTime = config.shiftDetails.duration;
             if (stationConfig.id !== 'Curing') availableTime -= totalBreakTime;
-
             const totalPossibleWorkTime = availableTime * stationConfig.capacity;
             stationStats.workingTime = totalPossibleWorkTime - stationStats.idleTime;
             stationStats.utilization = (stationStats.workingTime / totalPossibleWorkTime) * 100 || 0;
         });
-        return currentStats;
-    }
-    
-    function updateDashboard() {
-        const totalSeconds = Math.floor(simulationTime / 1000);
-        clockDisplay.textContent = new Date(totalSeconds * 1000).toISOString().substr(11, 8);
-        const currentBreak = checkForBreak(simulationTime);
-        statusDisplay.textContent = currentBreak ? currentBreak.name : 'Running';
-        statusDisplay.classList.toggle('on-break', !!currentBreak);
-        // ... update other dashboard elements as needed
+        return finalStats;
     }
 
+    function updateDashboard() {
+        clockDisplay.textContent = new Date(simulationTime).toISOString().substr(11, 8);
+        const currentBreak = checkForBreak(simulationTime);
+        statusDisplay.textContent = currentBreak ? currentBreak.name : 'Running';
+    }
+    
     function checkForBreak(time) {
         return activeConfig.shiftDetails.breaks.find(b => time >= b.start && time < b.end) || null;
     }
 
     function generateSummaryReport(finalStats, params, optimizationResult = null) {
-        finalStats = calculateStats(finalStats, activeConfig); // Use current active config for stats calc
         const finishedCount = finalStats.stations.Coding.setsProcessed;
-        const totalSimHours = params.shifts * 8;
-        
         let reportHTML = `<h3>Original Configuration</h3>
             <table>
-                <tr><td>Shifts</td><td>${params.shifts}</td></tr>
-                <tr><td>Backlog</td><td>${params.backlog}</td></tr>
-                <tr><td>Building</td><td>${params.building}</td></tr>
-                <tr><td>Cutting</td><td>${params.cutting}</td></tr>
-                <tr><td>Flipping</td><td>${params.flipping}</td></tr>
-                <tr><td>Curing</td><td>${params.curing}</td></tr>
-                <tr><td>Coding</td><td>${params.coding}</td></tr>
+                <tr><td>Shifts: ${params.shifts}</td><td>Backlog: ${params.backlog}</td></tr>
+                <tr><td>Building: ${params.building}</td><td>Cutting: ${params.cutting}</td></tr>
+                <tr><td>Flipping: ${params.flipping}</td><td>Curing: ${params.curing}</td></tr>
+                <tr><td>Coding: ${params.coding}</td><td></td></tr>
             </table>`;
-        
         if (optimizationResult) {
              reportHTML += `<h3>Optimized Configuration</h3>
-             <p>This configuration is recommended to complete the full backlog of ${params.backlog} sets.</p>
+             <p>Recommended to complete the full backlog of ${params.backlog} sets.</p>
              <table>
                 <tr><td>Building</td><td>${optimizationResult.params.building}</td></tr>
                 <tr><td>Cutting</td><td>${optimizationResult.params.cutting}</td></tr>
@@ -292,27 +313,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 <tr><td>Coding</td><td>${optimizationResult.params.coding}</td></tr>
             </table>`;
         }
-
-        reportHTML += `<h3>Process Analysis</h3>
-            <table><tr><th>Station</th><th>Avg. Utilization</th><th>Completed Sets</th></tr>`;
+        reportHTML += `<h3>Process Analysis</h3><table><tr><th>Station</th><th>Avg. Utilization</th><th>Completed Sets</th></tr>`;
         Object.values(finalStats.stations).forEach(station => {
             let utilClass = 'util-low';
             if (station.utilization > 85) utilClass = 'util-high';
             else if (station.utilization > 50) utilClass = 'util-medium';
-            reportHTML += `<tr>
-                <td>${station.name}</td>
-                <td class="${utilClass}">${station.utilization.toFixed(1)}%</td>
-                <td>${station.setsProcessed}</td>
-            </tr>`;
+            reportHTML += `<tr><td>${station.name}</td><td class="${utilClass}">${station.utilization.toFixed(1)}%</td><td>${station.setsProcessed}</td></tr>`;
         });
         reportHTML += `</table>`;
 
-        let bottleneck = { utilization: -1 };
+        let bottleneck = { utilization: -1, name: 'N/A' };
         Object.values(finalStats.stations).forEach(station => {
             if (station.utilization > bottleneck.utilization) bottleneck = station;
         });
-        reportHTML += `<hr><h3>Descriptive Analysis</h3>
-        <p><strong>Primary Bottleneck:</strong> The simulation identifies <strong>${bottleneck.name}</strong> as the primary constraint.</p>`;
+        reportHTML += `<hr><h3>Descriptive Analysis</h3><p><strong>Primary Bottleneck:</strong> <strong>${bottleneck.name}</strong></p>`;
         
         summaryTitleEl.textContent = optimizationResult ? "Optimization Complete" : "Shift Over!";
         summaryContentEl.innerHTML = reportHTML;
@@ -323,17 +337,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const params = getSimulationParameters();
         if (!params) return;
 
+        setupSimulation(params);
         statusDisplay.textContent = "Optimizing...";
         let optimizedParams = { ...params };
         let iteration = 0;
-        const maxIterations = 20;
+        const maxIterations = 25;
 
         while(iteration < maxIterations) {
-            let tempParams = { ...optimizedParams };
-            // Need to recreate the visual elements for stats calculation
-            setupSimulation(tempParams);
-            const resultStats = await startSimulation(tempParams, true);
-            
+            let resultStats = runHeadlessSimulation(optimizedParams);
             const finishedCount = resultStats.stations.Coding.setsProcessed;
 
             if (finishedCount >= params.backlog) {
@@ -344,25 +355,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let bottleneck = { utilization: -1, id: null };
             Object.values(resultStats.stations).forEach(station => {
-                if(station.utilization > bottleneck.utilization) {
-                    bottleneck = station;
-                }
+                if(station.utilization > bottleneck.utilization) bottleneck = station;
             });
+
+            if (!bottleneck.id) {
+                 alert("Could not determine bottleneck. Check simulation logic.");
+                 statusDisplay.textContent = "Error";
+                 return;
+            }
             
-            // Increase capacity of the bottleneck
             const key = bottleneck.id.toLowerCase();
             optimizedParams[key]++;
             iteration++;
         }
         
-        statusDisplay.textContent = "Could not optimize in 20 steps.";
+        statusDisplay.textContent = "Could not optimize";
         alert("Optimization could not find a solution within a reasonable number of steps. The system may be too constrained.");
     }
 
     // --- Event Listeners ---
     startButton.addEventListener('click', () => {
         const params = getSimulationParameters();
-        if(params) startSimulation(params);
+        if(params) startVisualSimulation(params);
     });
     optimizeButton.addEventListener('click', runOptimization);
     pauseButton.addEventListener('click', pauseSimulation);
