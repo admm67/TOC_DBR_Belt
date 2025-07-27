@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentSpeedMultiplier = 1;
   let isSimulationRunning = false;
 
-  // Format ms to HH:MM:SS
+  // Format milliseconds to HH:MM:SS
   function formatTime(ms) {
     const totalSeconds = Math.floor(ms / 1000);
     const hrs = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
@@ -31,30 +31,36 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${hrs}:${mins}:${secs}`;
   }
 
-  // Random processing time ± variationPercent (default 10%)
+  // Randomize processing time ± variationPercent (default 10%)
   function getRandomProcessingTime(baseTime, variationPercent = 10) {
     const variation = baseTime * (variationPercent / 100);
     const time = baseTime + (Math.random() * 2 - 1) * variation;
     return Math.max(time, baseTime * 0.5);
   }
 
-  // Validate input params, return array of error messages
+  // Validate all inputs, return array of error strings
   function validateInputs(inputs) {
     const errors = [];
-    if (isNaN(inputs.shifts) || inputs.shifts < 1 || inputs.shifts > 3)
+    if (isNaN(inputs.shifts) || inputs.shifts < 1 || inputs.shifts > 3) {
       errors.push('Number of shifts must be between 1 and 3.');
-
+    }
     ['building', 'cutting', 'flipping', 'curing', 'coding'].forEach((station) => {
-      if (isNaN(inputs[station]) || inputs[station] < 1)
-        errors.push(`${station.charAt(0).toUpperCase() + station.slice(1)} machines must be at least 1.`);
+      if (isNaN(inputs[station]) || inputs[station] < 1) {
+        errors.push(`${capitalize(station)} machines must be at least 1.`);
+      }
     });
-
-    if (isNaN(inputs.backlog) || inputs.backlog < 1)
+    if (isNaN(inputs.backlog) || inputs.backlog < 1) {
       errors.push('Backlog must be a positive integer.');
+    }
     return errors;
   }
 
-  // Enable/disable control buttons as needed
+  // Capitalize first letter helper
+  function capitalize(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  }
+
+  // Enable or disable simulation buttons
   function setControlsState({ start = true, pause = true, resume = true, fastForward = true, reset = true } = {}) {
     startButton.disabled = !start;
     pauseButton.disabled = !pause;
@@ -63,29 +69,51 @@ document.addEventListener('DOMContentLoaded', () => {
     resetButton.disabled = !reset;
   }
 
-  // Initialize simulation
+  // Read form values and parse as integers
+  function getFormValues() {
+    return {
+      shifts: parseInt(document.getElementById('input-shifts').value, 10),
+      building: parseInt(document.getElementById('input-building').value, 10),
+      cutting: parseInt(document.getElementById('input-cutting').value, 10),
+      flipping: parseInt(document.getElementById('input-flipping').value, 10),
+      curing: parseInt(document.getElementById('input-curing').value, 10),
+      coding: parseInt(document.getElementById('input-coding').value, 10),
+      backlog: parseInt(document.getElementById('input-backlog').value, 10),
+    };
+  }
+
+  // Setup Simulation with parameters
   function setupSimulation(params) {
     simulationTime = 0;
     currentSpeedMultiplier = 1;
     isSimulationRunning = true;
+
     stats = {
-      buffers: {},
+      buffers: {
+        'backlog-buffer': { queue: new Array(params.backlog).fill('belt'), history: [], avg: 0 },
+        'building-wip': { queue: [], history: [], avg: 0 },
+        'cutting-wip': { queue: [], history: [], avg: 0 },
+        'flipping-wip': { queue: [], history: [], avg: 0 },
+        'curing-wip': { queue: [], history: [], avg: 0 },
+        'finished-goods': { queue: [], history: [], avg: 0 },
+      },
       stations: {},
       hourlyOutput: Array(params.shifts * 8).fill(0),
     };
+
     activeConfig = {
       shiftDurationMs: params.shifts * 8 * 3600 * 1000,
       breaks: [],
       stations: {
-        Building: { capacity: params.building, baseTime: 379.2, inputBuffer: 'backlog-buffer', outputBuffer: 'building-wip' },
-        Cutting: { capacity: params.cutting, baseTime: 240, inputBuffer: 'building-wip', outputBuffer: 'cutting-wip' },
-        Flipping: { capacity: params.flipping, baseTime: 600, inputBuffer: 'cutting-wip', outputBuffer: 'flipping-wip' },
-        Curing: { capacity: params.curing, baseTime: 1596, inputBuffer: 'flipping-wip', outputBuffer: 'curing-wip', isDrum: true },
-        Coding: { capacity: params.coding, baseTime: 496.2, inputBuffer: 'curing-wip', outputBuffer: 'finished-goods' },
+        Building: { name: 'Building', capacity: params.building, baseTime: 379.2, inputBuffer: 'backlog-buffer', outputBuffer: 'building-wip' },
+        Cutting: { name: 'Cutting', capacity: params.cutting, baseTime: 240, inputBuffer: 'building-wip', outputBuffer: 'cutting-wip' },
+        Flipping: { name: 'Flipping', capacity: params.flipping, baseTime: 600, inputBuffer: 'cutting-wip', outputBuffer: 'flipping-wip' },
+        Curing: { name: 'Curing (DRUM)', capacity: params.curing, baseTime: 1596, inputBuffer: 'flipping-wip', outputBuffer: 'curing-wip', isDrum: true },
+        Coding: { name: 'Coding', capacity: params.coding, baseTime: 496.2, inputBuffer: 'curing-wip', outputBuffer: 'finished-goods' },
       },
     };
 
-    // Define standard breaks for each shift
+    // Define breaks per shift
     for (let i = 0; i < params.shifts; i++) {
       const shiftStart = i * 8 * 3600 * 1000;
       activeConfig.breaks.push(
@@ -95,21 +123,11 @@ document.addEventListener('DOMContentLoaded', () => {
       );
     }
 
-    // Initialize buffers with their queues and history
-    stats.buffers = {
-      'backlog-buffer': { queue: new Array(params.backlog).fill('belt'), history: [], avg: 0 },
-      'building-wip': { queue: [], history: [], avg: 0 },
-      'cutting-wip': { queue: [], history: [], avg: 0 },
-      'flipping-wip': { queue: [], history: [], avg: 0 },
-      'curing-wip': { queue: [], history: [], avg: 0 },
-      'finished-goods': { queue: [], history: [], avg: 0 },
-    };
-
-    // Initialize stations' stats and workers
+    // Initialize stations and workers
     Object.entries(activeConfig.stations).forEach(([id, s]) => {
       stats.stations[id] = {
         id,
-        name: s.name || id,
+        name: s.name,
         capacity: s.capacity,
         setsProcessed: 0,
         idleTime: 0,
@@ -120,19 +138,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     renderStations();
-
     statusDisplay.textContent = 'Running';
     statusDisplay.classList.remove('on-break');
-
     setControlsState({ start: false, pause: true, resume: false, fastForward: true, reset: true });
-
     startSimulationLoop();
   }
 
-  // Create UI containers for stations and buffers
+  // Render stations and buffers visually
   function renderStations() {
     stationsWrapper.innerHTML = '';
-
     Object.entries(activeConfig.stations).forEach(([id, station]) => {
       const container = document.createElement('div');
       container.className = 'station-container';
@@ -140,17 +154,15 @@ document.addEventListener('DOMContentLoaded', () => {
       container.id = `container-${id}`;
 
       const title = document.createElement('h2');
-      title.textContent = station.name || id;
+      title.textContent = station.name;
       if (station.isDrum) title.style.color = '#dc3545';
       container.appendChild(title);
 
-      // Station processing area
       const stationDiv = document.createElement('div');
       stationDiv.className = 'station';
       stationDiv.id = `station-${id}`;
       container.appendChild(stationDiv);
 
-      // Input buffer display
       if (station.inputBuffer) {
         const inBufferDiv = document.createElement('div');
         inBufferDiv.className = 'wip-buffer';
@@ -160,7 +172,6 @@ document.addEventListener('DOMContentLoaded', () => {
         container.appendChild(inBufferDiv);
       }
 
-      // Output buffer display
       if (station.outputBuffer) {
         const outBufferDiv = document.createElement('div');
         outBufferDiv.className = 'wip-buffer';
@@ -170,7 +181,6 @@ document.addEventListener('DOMContentLoaded', () => {
         container.appendChild(outBufferDiv);
       }
 
-      // Stats display
       const statsDiv = document.createElement('div');
       statsDiv.className = 'stats-display';
       statsDiv.id = `stats-${id}`;
@@ -180,7 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Render belt sets as circles
+  // Render belt sets as circles for stations and buffers
   function renderBeltSets(containerId, count, state = '') {
     const container = document.getElementById(containerId);
     if (!container) return;
@@ -193,45 +203,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Check if simulation time is within a break period
+  // Check if current simulation time is in a break period
   function isInBreak(time) {
     for (const brk of activeConfig.breaks) {
-      if (time >= brk.start && time < brk.end) return brk.name;
+      if (time >= brk.start && time < brk.end) {
+        return brk.name;
+      }
     }
     return null;
   }
 
-  // Increment idle time across all stations
+  // Increment idle times during breaks
   function incrementIdleTime(delta) {
     Object.values(stats.stations).forEach((station) => {
       station.idleTime += delta * currentSpeedMultiplier;
     });
   }
 
-  // Update stations, buffers, stats UI
-  function updateUI() {
-    // Render buffers
-    for (const bufferName in stats.buffers) {
-      const buf = stats.buffers[bufferName];
-      renderBeltSets(`buffer-${bufferName}`, buf.queue.length, '');
-    }
-    // Render stations processing
-    Object.entries(stats.stations).forEach(([stationId, stat]) => {
-      const busyCount = stat.workers.reduce((acc, w) => (w.busyUntil > simulationTime ? acc + 1 : acc), 0);
-      renderBeltSets(`station-${stationId}`, busyCount, 'processing');
-
-      const statEl = document.getElementById(`stats-${stationId}`);
-      if (statEl) {
-        statEl.innerHTML = `
-          <div>Sets Processed: ${stat.setsProcessed}</div>
-          <div>Utilization: ${stat.utilization.toFixed(1)}%</div>
-          <div>Idle Time: ${(stat.idleTime / 60000).toFixed(1)} min</div>
-        `;
-      }
-    });
-  }
-
-  // Simulation step (called every tick)
+  // Simulation step executed every tick
   function simulationStep(delta) {
     simulationTime += delta * currentSpeedMultiplier;
     if (simulationTime > activeConfig.shiftDurationMs) {
@@ -244,13 +233,15 @@ document.addEventListener('DOMContentLoaded', () => {
       statusDisplay.textContent = `On Break: ${breakName}`;
       statusDisplay.classList.add('on-break');
       incrementIdleTime(delta);
-      return; // Machines do not work during breaks
+      updateUI();
+      clockDisplay.textContent = formatTime(simulationTime);
+      return;
     } else {
       statusDisplay.textContent = 'Running';
       statusDisplay.classList.remove('on-break');
     }
 
-    // For each station and each worker, process work if available
+    // Process stations and workers
     Object.entries(activeConfig.stations).forEach(([stationId, stationConfig]) => {
       const stationStats = stats.stations[stationId];
       const inputBuffer = stationConfig.inputBuffer ? stats.buffers[stationConfig.inputBuffer] : null;
@@ -259,70 +250,80 @@ document.addEventListener('DOMContentLoaded', () => {
       for (let w = 0; w < stationStats.capacity; w++) {
         const worker = stationStats.workers[w];
         if (worker.busyUntil > simulationTime) {
-          // Worker busy
           stationStats.workingTime += delta * currentSpeedMultiplier;
           continue;
         }
 
-        // Worker idle now - check if input buffer has work
         if (inputBuffer && inputBuffer.queue.length === 0) {
-          // no work - idle time
           stationStats.idleTime += delta * currentSpeedMultiplier;
           continue;
         }
 
-        // Assign new work
-        if (inputBuffer && inputBuffer.queue.length > 0) {
+        if (inputBuffer) {
           inputBuffer.queue.shift();
         }
 
-        // Randomize processing time
-        const processDurationMs = getRandomProcessingTime(stationConfig.baseTime, 10) * 1000;
-        worker.busyUntil = simulationTime + processDurationMs;
-
+        const processingDuration = getRandomProcessingTime(stationConfig.baseTime, 10) * 1000;
+        worker.busyUntil = simulationTime + processingDuration;
         stationStats.workingTime += delta * currentSpeedMultiplier;
 
-        // Schedule completion callback
         setTimeout(() => {
-          if (outputBuffer) {
-            outputBuffer.queue.push('belt');
-          }
+          if (outputBuffer) outputBuffer.queue.push('belt');
           stationStats.setsProcessed++;
           stationStats.utilization = (stationStats.workingTime / (simulationTime || 1)) * 100;
 
-          // Record hourly output
           const hourIndex = Math.floor(simulationTime / (3600 * 1000));
-          if (hourIndex < stats.hourlyOutput.length) {
-            stats.hourlyOutput[hourIndex]++;
-          }
-        }, processDurationMs / currentSpeedMultiplier);
+          if (hourIndex < stats.hourlyOutput.length) stats.hourlyOutput[hourIndex]++;
+        }, processingDuration / currentSpeedMultiplier);
       }
     });
 
-    // Update buffer histories and averages
-    Object.values(stats.buffers).forEach((buf) => {
-      buf.history.push(buf.queue.length);
-      if (buf.history.length > 20) buf.history.shift();
-      buf.avg = buf.history.reduce((a, b) => a + b, 0) / buf.history.length;
+    // Update buffer history and averages
+    Object.values(stats.buffers).forEach((buffer) => {
+      buffer.history.push(buffer.queue.length);
+      if (buffer.history.length > 20) buffer.history.shift();
+      buffer.avg = buffer.history.reduce((a, b) => a + b, 0) / buffer.history.length;
     });
 
     updateUI();
     clockDisplay.textContent = formatTime(simulationTime);
   }
 
-  // Identify bottleneck by utilization and buffer buildup
+  // Update the visualization UI
+  function updateUI() {
+    for (const bufferName in stats.buffers) {
+      const buf = stats.buffers[bufferName];
+      renderBeltSets(`buffer-${bufferName}`, buf.queue.length, '');
+    }
+    for (const [stationId, stationStats] of Object.entries(stats.stations)) {
+      const busyCount = stationStats.workers.reduce((acc, w) => (w.busyUntil > simulationTime ? acc + 1 : acc), 0);
+      renderBeltSets(`station-${stationId}`, busyCount, 'processing');
+      const statEl = document.getElementById(`stats-${stationId}`);
+      if (statEl) {
+        statEl.innerHTML = `
+          <div>Sets Processed: ${stationStats.setsProcessed}</div>
+          <div>Utilization: ${stationStats.utilization.toFixed(1)}%</div>
+          <div>Idle Time: ${(stationStats.idleTime / 60000).toFixed(1)} min</div>
+        `;
+      }
+    }
+  }
+
+  // Detect bottleneck station or buffer combining utilization and buffer buildup
   function identifyBottleneck() {
     let maxUtil = 0;
     let maxUtilStation = null;
-    for (const s of Object.values(stats.stations)) {
-      if (s.utilization > maxUtil) {
-        maxUtil = s.utilization;
-        maxUtilStation = s;
+
+    for (const station of Object.values(stats.stations)) {
+      if (station.utilization > maxUtil) {
+        maxUtil = station.utilization;
+        maxUtilStation = station;
       }
     }
 
     let maxBufferAvg = 0;
     let maxBufferName = null;
+
     for (const [name, buffer] of Object.entries(stats.buffers)) {
       if (buffer.avg > maxBufferAvg) {
         maxBufferAvg = buffer.avg;
@@ -331,7 +332,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const BUFFER_THRESHOLD = 10;
-
     if (maxBufferAvg > BUFFER_THRESHOLD) {
       return {
         type: 'Buffer buildup',
@@ -348,7 +348,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return { type: 'Unknown', name: 'None' };
   }
 
-  // End simulation and show summary
+  // End the simulation and show summary modal
   function endSimulation() {
     isSimulationRunning = false;
     setControlsState({ start: true, pause: false, resume: false, fastForward: false, reset: true });
@@ -396,9 +396,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     summaryContentEl.innerHTML = reportHtml;
     summaryReportEl.classList.remove('hidden');
+    summaryReportEl.focus();
   }
 
-  // Stop simulation intervals
+  // Stop simulation timers
   function stopSimulationLoop() {
     clearInterval(simulationInterval);
     clearInterval(dashboardInterval);
@@ -409,25 +410,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const tickMs = 100;
     if (simulationInterval) clearInterval(simulationInterval);
     simulationInterval = setInterval(() => simulationStep(tickMs), tickMs);
-    dashboardInterval = setInterval(() => updateUI(), 1000);
+
+    dashboardInterval = setInterval(() => updateUI(), 1000); // Update UI regularly
   }
 
-  // Parse form inputs
-  function getFormValues() {
-    return {
-      shifts: parseInt(document.getElementById('input-shifts').value, 10),
-      building: parseInt(document.getElementById('input-building').value, 10),
-      cutting: parseInt(document.getElementById('input-cutting').value, 10),
-      flipping: parseInt(document.getElementById('input-flipping').value, 10),
-      curing: parseInt(document.getElementById('input-curing').value, 10),
-      coding: parseInt(document.getElementById('input-coding').value, 10),
-      backlog: parseInt(document.getElementById('input-backlog').value, 10),
-    };
-  }
+  // Event listeners
 
-  // Event listeners for form and controls
-
-  // Validate inputs on input events and enable/disable start button
+  // Validate inputs and enable/disable Start button
   form.addEventListener('input', () => {
     const params = getFormValues();
     const errors = validateInputs(params);
@@ -440,7 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Form submission to start simulation
+  // Form submission starts simulation
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     const params = getFormValues();
@@ -485,6 +474,7 @@ document.addEventListener('DOMContentLoaded', () => {
     summaryReportEl.classList.add('hidden');
     statusDisplay.textContent = 'Idle';
     clockDisplay.textContent = '00:00:00';
+    errorMessageEl.textContent = '';
     setControlsState({ start: false, pause: false, resume: false, fastForward: false, reset: false });
   });
 
@@ -492,6 +482,6 @@ document.addEventListener('DOMContentLoaded', () => {
     summaryReportEl.classList.add('hidden');
   });
 
-  // Initialize UI state
+  // Initialize controls state on load
   setControlsState({ start: false, pause: false, resume: false, fastForward: false, reset: false });
 });
