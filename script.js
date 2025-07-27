@@ -19,7 +19,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let simulationTime = 0;
   let stats = {};
   let activeConfig = {};
-  let currentSpeedMultiplier = 1;
+  // Default speed multiplier is 60 for 1 sec real = 1 min sim
+  let currentSpeedMultiplier = 60;
   let isSimulationRunning = false;
 
   // Format milliseconds to HH:MM:SS
@@ -85,7 +86,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Setup Simulation with parameters
   function setupSimulation(params) {
     simulationTime = 0;
-    currentSpeedMultiplier = 1;
+    // Set default speed multiplier to 60: 1 real sec = 1 simulated minute
+    currentSpeedMultiplier = 60;
     isSimulationRunning = true;
 
     stats = {
@@ -137,16 +139,28 @@ document.addEventListener('DOMContentLoaded', () => {
       };
     });
 
-    renderStations();
+    renderStationsWithBacklogAndFinished();
     statusDisplay.textContent = 'Running';
     statusDisplay.classList.remove('on-break');
     setControlsState({ start: false, pause: true, resume: false, fastForward: true, reset: true });
     startSimulationLoop();
   }
 
-  // Render stations and buffers visually
-  function renderStations() {
+  // Render backlog and finished containers explicitly with stations
+  function renderStationsWithBacklogAndFinished() {
     stationsWrapper.innerHTML = '';
+
+    // Backlog buffer container at start
+    const backlogDiv = document.createElement('div');
+    backlogDiv.className = 'station-container';
+    backlogDiv.id = 'container-backlog-buffer';
+    backlogDiv.innerHTML = `
+      <h2>Backlog</h2>
+      <div class="wip-buffer" id="buffer-backlog-buffer"></div>
+    `;
+    stationsWrapper.appendChild(backlogDiv);
+
+    // Render all stations
     Object.entries(activeConfig.stations).forEach(([id, station]) => {
       const container = document.createElement('div');
       container.className = 'station-container';
@@ -163,7 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
       stationDiv.id = `station-${id}`;
       container.appendChild(stationDiv);
 
-      if (station.inputBuffer) {
+      if (station.inputBuffer && station.inputBuffer !== 'backlog-buffer') {
         const inBufferDiv = document.createElement('div');
         inBufferDiv.className = 'wip-buffer';
         inBufferDiv.id = `buffer-${station.inputBuffer}`;
@@ -172,7 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
         container.appendChild(inBufferDiv);
       }
 
-      if (station.outputBuffer) {
+      if (station.outputBuffer && station.outputBuffer !== 'finished-goods') {
         const outBufferDiv = document.createElement('div');
         outBufferDiv.className = 'wip-buffer';
         outBufferDiv.id = `buffer-${station.outputBuffer}`;
@@ -188,6 +202,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
       stationsWrapper.appendChild(container);
     });
+
+    // Finished goods buffer container at end
+    const finishedDiv = document.createElement('div');
+    finishedDiv.className = 'station-container';
+    finishedDiv.id = 'container-finished-goods';
+    finishedDiv.innerHTML = `
+      <h2>Finished Goods</h2>
+      <div class="wip-buffer" id="buffer-finished-goods"></div>
+    `;
+    stationsWrapper.appendChild(finishedDiv);
   }
 
   // Render belt sets as circles for stations and buffers
@@ -222,7 +246,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Simulation step executed every tick
   function simulationStep(delta) {
-    simulationTime += delta * currentSpeedMultiplier;
+    // delta is real ms elapsed * currentSpeedMultiplier
+    simulationTime += delta;
+
     if (simulationTime > activeConfig.shiftDurationMs) {
       endSimulation();
       return;
@@ -250,12 +276,12 @@ document.addEventListener('DOMContentLoaded', () => {
       for (let w = 0; w < stationStats.capacity; w++) {
         const worker = stationStats.workers[w];
         if (worker.busyUntil > simulationTime) {
-          stationStats.workingTime += delta * currentSpeedMultiplier;
+          stationStats.workingTime += delta;
           continue;
         }
 
         if (inputBuffer && inputBuffer.queue.length === 0) {
-          stationStats.idleTime += delta * currentSpeedMultiplier;
+          stationStats.idleTime += delta;
           continue;
         }
 
@@ -263,9 +289,9 @@ document.addEventListener('DOMContentLoaded', () => {
           inputBuffer.queue.shift();
         }
 
-        const processingDuration = getRandomProcessingTime(stationConfig.baseTime, 10) * 1000;
+        const processingDuration = getRandomProcessingTime(stationConfig.baseTime, 10) * 1000; // convert seconds to ms
         worker.busyUntil = simulationTime + processingDuration;
-        stationStats.workingTime += delta * currentSpeedMultiplier;
+        stationStats.workingTime += delta;
 
         setTimeout(() => {
           if (outputBuffer) outputBuffer.queue.push('belt');
@@ -407,11 +433,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Start simulation intervals
   function startSimulationLoop() {
-    const tickMs = 100;
+    const tickMs = 100; // 100 ms per tick (real time)
     if (simulationInterval) clearInterval(simulationInterval);
-    simulationInterval = setInterval(() => simulationStep(tickMs), tickMs);
+    simulationInterval = setInterval(() => simulationStep(tickMs * currentSpeedMultiplier), tickMs);
 
-    dashboardInterval = setInterval(() => updateUI(), 1000); // Update UI regularly
+    dashboardInterval = setInterval(() => updateUI(), 1000); // Update UI every second (real time)
   }
 
   // Event listeners
