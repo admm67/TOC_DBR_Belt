@@ -11,7 +11,6 @@ h1 {
     font-size: 1.3em;
     color: #1d3557;
 }
-
 .controls {
     display: flex;
     justify-content: center;
@@ -35,7 +34,6 @@ h1 {
     color: #626e7b;
     cursor: not-allowed;
 }
-/* Colored controls */
 #pause-simulation { background: #ffc107; color: #212529; }
 #resume-simulation { background: #28a745; color: #fff; }
 #fast-forward-simulation { background: #17a2b8; color: #fff; }
@@ -43,7 +41,6 @@ h1 {
 #pause-simulation:disabled, #resume-simulation:disabled, #fast-forward-simulation:disabled, #reset-wip:disabled {
     background: #ccc; color: #a2a2a2;
 }
-
 #simulation-status-bar {
     display: flex;
     justify-content: center;
@@ -58,7 +55,6 @@ h1 {
 }
 #simulation-status-bar span { font-weight: bold; }
 #status-display.on-break { color: #dc3545; }
-
 #simulation-container, #stations-wrapper {
     display: flex;
     justify-content: center;
@@ -66,7 +62,6 @@ h1 {
     gap: 16px;
     flex-wrap: wrap;
 }
-
 .station-container {
     display: flex;
     flex-direction: column;
@@ -79,17 +74,13 @@ h1 {
     margin-bottom: 10px;
     transition: background 0.25s;
 }
-.station-container.on-break {
-    background: #f2f2f2;
-}
-
+.station-container.on-break { background: #f2f2f2; }
 .station-container h2 {
     font-size: 1em;
     margin: 5px 0 10px 0;
     color: #21536f;
     text-align: center;
 }
-
 .station, .wip-buffer {
     width: 100%;
     min-height: 54px;
@@ -111,10 +102,8 @@ h1 {
     border: 2px dashed #bbcaf0;
     background: #f7fafe;
 }
-
 .drum { border: 3px solid #dc3545; }
 .drum-container { background: #fae8e7; }
-
 .v-belt-set {
     width: 29px;
     height: 29px;
@@ -129,7 +118,6 @@ h1 {
     flex-shrink: 0;
 }
 .v-belt-set.processing { background: #ffc107; color: #222; }
-
 .stats-display {
     width: 100%;
     margin-top: 7px;
@@ -143,18 +131,16 @@ h1 {
 .stats-display span { font-weight: bold; float: right; }
 
 #summary-report {
-    /* The only real change: solid white full overlay */
     position: fixed;
     top: 0; left: 0;
     width: 100vw; height: 100vh;
-    background: #fff !important; /* Opaque white, never transparent */
+    background: #fff !important;   /* Opaque white overlay for full readability */
     z-index: 900;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 #summary-report.hidden { display: none; }
-
 .summary-modal-content {
     background: #fff;
     border-radius: 13px;
@@ -181,8 +167,6 @@ h1 {
     background: #e8eaed;
     border-radius: 6px;
 }
-
-/* Responsive mobile tweaks */
 @media (max-width: 650px) {
     .summary-modal-content, #summary-report {
         width: 99vw;
