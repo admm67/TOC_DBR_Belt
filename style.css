@@ -3,19 +3,23 @@ form#simulation-setup-form fieldset {
   padding: 15px;
   margin-bottom: 25px;
   border-radius: 8px;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 form#simulation-setup-form label {
   display: block;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   font-weight: 600;
+  font-size: 0.95em;
 }
 
 form#simulation-setup-form input[type="number"] {
-  margin-left: 10px;
+  margin-left: 8px;
   width: 60px;
-  padding: 5px;
-  border-radius: 5px;
+  padding: 4px 6px;
+  border-radius: 4px;
   border: 1px solid #aaa;
 }
 
@@ -25,16 +29,21 @@ button:disabled {
 }
 
 .v-belt-set {
-  width: 28px;
-  height: 28px;
+  width: 29px;
+  height: 29px;
   border-radius: 50%;
   background-color: #256dcb;
   margin: 3px;
-  box-sizing: border-box;
   transition: background-color 0.3s ease;
 }
 
 .v-belt-set.processing {
   background-color: #ffc107;
   color: #222;
+}
+
+/* Drum station emphasis */
+.drum-container {
+  background-color: #fae8e7;
+  border: 3px solid #dc3545;
 }
