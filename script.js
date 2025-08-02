@@ -29,7 +29,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const curing = parseInt(prompt("Enter number of Curing machines:", "4")) || 4;
         const coding = parseInt(prompt("Enter number of Coding machines:", "1")) || 1;
         const backlog = parseInt(prompt(`Enter backlog for ${shifts * 8} hours:`, "100")) || 100;
-
         return {
             shifts: Math.max(1, Math.min(3, shifts)),
             building, cutting, flipping, curing, coding, backlog
@@ -52,11 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 Building: { name: "Building", capacity: params.building, time: 379.2, inputBuffer: 'backlog-buffer', outputBuffer: 'building-wip' },
                 Cutting: { name: "Cutting", capacity: params.cutting, time: 240, inputBuffer: 'building-wip', outputBuffer: 'cutting-wip' },
                 Flipping: { name: "Flipping", capacity: params.flipping, time: 600, inputBuffer: 'cutting-wip', outputBuffer: 'flipping-wip' },
-                Curing: { name: "Curing (DRUM)", capacity: params.curing,
-                         breakCapacity: Math.ceil(params.curing / 2),
-                         time: 1596,
-                         inputBuffer: 'flipping-wip', outputBuffer: 'curing-wip',
-                         isDrum: true },
+                Curing: { name: "Curing (DRUM)", capacity: params.curing, breakCapacity: Math.ceil(params.curing / 2), time: 1596, inputBuffer: 'flipping-wip', outputBuffer: 'curing-wip', isDrum: true },
                 Coding: { name: "Coding", capacity: params.coding, time: 496.2, inputBuffer: 'curing-wip', outputBuffer: 'finished-goods' }
             }
         };
@@ -79,11 +74,12 @@ document.addEventListener('DOMContentLoaded', () => {
             let wipHtml = '';
             if (station.outputBuffer !== 'finished-goods') {
                 stats.buffers[station.outputBuffer] = { history: [], avg: 0 };
-                wipHtml = `<div class="wip-buffer" id="${station.outputBuffer}"></div>
-                           <div class="stats-display" id="${station.outputBuffer}-stats">
-                              <div>WIP: <span class="wip-current">0</span></div>
-                              <div>Avg WIP: <span class="wip-avg">0.0</span></div>
-                           </div>`;
+                wipHtml = `
+                    <div class="wip-buffer" id="${station.outputBuffer}"></div>
+                    <div class="stats-display" id="${station.outputBuffer}-stats">
+                        <div>WIP: <span class="wip-current">0</span></div>
+                        <div>Avg WIP: <span class="wip-avg">0.0</span></div>
+                    </div>`;
             }
             stationsWrapper.innerHTML += `
               <div class="station-container ${station.isDrum ? 'drum-container' : ''}" id="${id}-container">
@@ -104,7 +100,6 @@ document.addEventListener('DOMContentLoaded', () => {
         summaryReportEl.classList.add('hidden');
         simulationTime = 0;
         setCounter = 0;
-
         setupSimulation(params);
 
         const backlogBuffer = document.getElementById('backlog-buffer');
@@ -116,28 +111,31 @@ document.addEventListener('DOMContentLoaded', () => {
         resumeSimulation();
         startButton.disabled = true;
     }
-    
+
     function pauseSimulation() {
         clearInterval(simulationInterval);
         clearInterval(dashboardInterval);
         simulationInterval = null;
         dashboardInterval = null;
-        if(simulationTime > 0 && simulationTime < activeConfig.shiftDetails.duration) {
+        if (simulationTime > 0 && simulationTime < activeConfig.shiftDetails.duration) {
             updateControlButtons(true);
         }
     }
+
     function resumeSimulation() {
-        if(simulationInterval) return;
+        if (simulationInterval) return;
         simulationInterval = setInterval(simulationTick, 200 / currentSpeedMultiplier);
         dashboardInterval = setInterval(updateDashboard, 1000 / currentSpeedMultiplier);
         updateControlButtons(false);
     }
+
     function fastForward() {
         currentSpeedMultiplier *= 2;
         ffButton.textContent = `Fast Forward (x${currentSpeedMultiplier})`;
         pauseSimulation();
         resumeSimulation();
     }
+
     function updateControlButtons(paused) {
         pauseButton.disabled = paused;
         resumeButton.disabled = !paused;
@@ -145,27 +143,26 @@ document.addEventListener('DOMContentLoaded', () => {
         resetButton.disabled = false;
     }
 
-    // --- RESET WIP, Backlog, Finished, Stats, Hourly Output ---
     resetButton.addEventListener('click', resetWIP);
+
     function resetWIP() {
-        // 1. Clear stations (processing)
-        Object.keys(activeConfig.stations || {}).forEach(stationId => {
+        // Clear stations and buffers
+        Object.keys(activeConfig.stations).forEach(stationId => {
             const stationEl = document.getElementById(stationId);
             if (stationEl) stationEl.innerHTML = '';
         });
-        // 2. Clear ALL buffers: WIP, Backlog, Finished
         ['backlog-buffer', 'building-wip', 'cutting-wip', 'flipping-wip', 'curing-wip', 'finished-goods'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.innerHTML = '';
         });
-        // 3. Reset stats and hourly output
-        Object.values(stats.stations || {}).forEach(st => {
+        // Reset stats
+        Object.values(stats.stations).forEach(st => {
             st.setsProcessed = 0;
             st.idleTime = 0;
             st.workingTime = 0;
             st.utilization = 0;
         });
-        Object.values(stats.buffers || {}).forEach(bf => {
+        Object.values(stats.buffers).forEach(bf => {
             bf.history = [];
             bf.avg = 0;
         });
@@ -200,33 +197,38 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         Object.keys(stats.buffers).forEach(bufferId => {
             const bufferEl = document.getElementById(bufferId);
-            if(bufferEl) stats.buffers[bufferId].history.push(bufferEl.children.length);
+            if (bufferEl) stats.buffers[bufferId].history.push(bufferEl.children.length);
         });
         const currentHour = Math.floor(simulationTime / (3600 * 1000));
-        if(currentHour < stats.hourlyOutput.length) {
+        if (currentHour < stats.hourlyOutput.length) {
             stats.hourlyOutput[currentHour] = document.getElementById('finished-goods').children.length;
         }
         if (simulationTime >= activeConfig.shiftDetails.duration) {
             endSimulation();
         }
     }
+
     function updateDashboard() {
         const totalSeconds = Math.floor(simulationTime / 1000);
         const hours = Math.floor(totalSeconds / 3600);
         const minutes = Math.floor((totalSeconds % 3600) / 60);
         const seconds = totalSeconds % 60;
-        clockDisplay.textContent = `${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+        clockDisplay.textContent =
+            `${String(hours).padStart(2, '0')}:` +
+            `${String(minutes).padStart(2, '0')}:` +
+            `${String(seconds).padStart(2, '0')}`;
         const currentBreak = checkForBreak(simulationTime);
         statusDisplay.textContent = currentBreak ? currentBreak.name : 'Running';
         statusDisplay.classList.toggle('on-break', !!currentBreak);
         document.querySelectorAll('.station-container').forEach(el => el.classList.remove('on-break'));
-        if(currentBreak) {
-             Object.keys(activeConfig.stations).forEach(id => {
-                if(id !== 'Curing') document.getElementById(`${id}-container`).classList.add('on-break');
-             });
+        if (currentBreak) {
+            Object.keys(activeConfig.stations).forEach(id => {
+                if (id !== 'Curing') document.getElementById(`${id}-container`).classList.add('on-break');
+            });
         }
-        calculateAndDisplayFinalStats(false); 
+        calculateAndDisplayFinalStats(false);
     }
+
     function startProcessing(set, stationId, stationConfig) {
         const stationEl = document.getElementById(stationId);
         stationEl.appendChild(set);
@@ -235,10 +237,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const processTimeInRealMs = (stationConfig.time * 1000) / activeConfig.timeScale;
         setTimeout(() => {
             const outputBufferEl = document.getElementById(stationConfig.outputBuffer);
-            if(outputBufferEl) outputBufferEl.appendChild(set);
+            if (outputBufferEl) outputBufferEl.appendChild(set);
             set.classList.remove('processing');
         }, processTimeInRealMs / currentSpeedMultiplier);
     }
+
     function endSimulation() {
         pauseSimulation();
         startButton.disabled = false;
@@ -248,9 +251,11 @@ document.addEventListener('DOMContentLoaded', () => {
         resetButton.disabled = true;
         generateSummaryReport();
     }
+
     function checkForBreak(time) {
         return activeConfig.shiftDetails.breaks.find(b => time >= b.start && time < b.end) || null;
     }
+
     function createVbeltSet() {
         setCounter++;
         const set = document.createElement('div');
@@ -258,6 +263,7 @@ document.addEventListener('DOMContentLoaded', () => {
         set.innerText = `S${setCounter}`;
         return set;
     }
+
     function calculateAndDisplayFinalStats(isFinalReport) {
         let totalBreakTime = 0;
         activeConfig.shiftDetails.breaks.forEach(b => {
@@ -274,9 +280,10 @@ document.addEventListener('DOMContentLoaded', () => {
             stationStats.utilization = (stationStats.workingTime / totalPossibleWorkTime) * 100 || 0;
             if (!isFinalReport) {
                 const statsEl = document.getElementById(`${id}-stats`);
-                if(statsEl) {
-                    statsEl.innerHTML = `<div>Util: <span class="utilization">${stationStats.utilization.toFixed(1)}%</span></div>
-                                         <div>Idle: <span class="idle-time">${(stationStats.idleTime / (1000 * 60)).toFixed(1)}m</span></div>`;
+                if (statsEl) {
+                    statsEl.innerHTML = `
+                        <div>Util: <span class="utilization">${stationStats.utilization.toFixed(1)}%</span></div>
+                        <div>Idle: <span class="idle-time">${(stationStats.idleTime / (1000 * 60)).toFixed(1)}m</span></div>`;
                 }
             }
         });
@@ -289,13 +296,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 const currentWIP = bufferEl.children.length;
                 const sumWIP = bufferStats.history.reduce((a, b) => a + b, 0);
                 bufferStats.avg = sumWIP / bufferStats.history.length || 0;
-                statsEl.innerHTML = `<div>WIP: <span class="wip-current">${currentWIP}</span></div>
-                                     <div>Avg WIP: <span class="wip-avg">${bufferStats.avg.toFixed(1)}</span></div>`;
+                statsEl.innerHTML = `
+                    <div>WIP: <span class="wip-current">${currentWIP}</span></div>
+                    <div>Avg WIP: <span class="wip-avg">${bufferStats.avg.toFixed(1)}</span></div>`;
             });
             const finishedTotalEl = document.querySelector('#finished-goods-stats .finished-total');
-            if(finishedTotalEl) finishedTotalEl.textContent = document.getElementById('finished-goods').children.length;
+            if (finishedTotalEl) finishedTotalEl.textContent = document.getElementById('finished-goods').children.length;
         }
     }
+
     function generateSummaryReport() {
         calculateAndDisplayFinalStats(true);
         const finishedCount = document.getElementById('finished-goods').children.length;
@@ -354,7 +363,7 @@ document.addEventListener('DOMContentLoaded', () => {
         reportHTML += `</table>`;
         let bottleneck = { utilization: -1 };
         Object.values(stats.stations).forEach(station => {
-            if(station.utilization > bottleneck.utilization) bottleneck = station;
+            if (station.utilization > bottleneck.utilization) bottleneck = station;
         });
         reportHTML += `
             <hr>
@@ -368,6 +377,8 @@ document.addEventListener('DOMContentLoaded', () => {
         summaryContentEl.innerHTML = reportHTML;
         summaryReportEl.classList.remove('hidden');
     }
+
+    // Event Listeners
     startButton.addEventListener('click', () => {
         const userParams = getSimulationParameters();
         startSimulation(userParams);
@@ -375,5 +386,6 @@ document.addEventListener('DOMContentLoaded', () => {
     pauseButton.addEventListener('click', pauseSimulation);
     resumeButton.addEventListener('click', resumeSimulation);
     ffButton.addEventListener('click', fastForward);
+    resetButton.addEventListener('click', resetWIP);
     closeSummaryButton.addEventListener('click', () => summaryReportEl.classList.add('hidden'));
 });
