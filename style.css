@@ -130,55 +130,189 @@ h1 {
 .stats-display div { margin-bottom: 2px; }
 .stats-display span { font-weight: bold; float: right; }
 
+/* MODIFIED MODAL STYLES FOR SCROLLABLE CONTENT */
 #summary-report {
     position: fixed;
-    top: 0; left: 0;
-    width: 100vw; height: 100vh;
-    background: #fff !important;   /* Opaque white overlay for full readability */
+    top: 0; 
+    left: 0;
+    width: 100vw; 
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5) !important;   /* Semi-transparent overlay */
     z-index: 900;
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
 }
-#summary-report.hidden { display: none; }
+
+#summary-report.hidden { 
+    display: none; 
+}
+
 .summary-modal-content {
     background: #fff;
     border-radius: 13px;
     box-shadow: 0 4px 20px rgba(30,30,50,0.13);
-    width: 98vw;
-    max-width: 500px;
+    width: 100%;
+    max-width: 800px;
+    max-height: 90vh;           /* Limit height to 90% of viewport */
     margin: auto;
-    padding: 17px 12px 24px 12px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;           /* Prevent content from overflowing the modal */
+}
+
+/* Modal header (non-scrollable) */
+.summary-modal-header {
+    padding: 17px 20px 10px 20px;
+    border-bottom: 1px solid #e0e2e9;
+    flex-shrink: 0;            /* Don't shrink the header */
+}
+
+.summary-modal-header h2 {
+    margin: 0;
+    font-size: 1.4em;
+    color: #1d3557;
+    text-align: center;
+}
+
+/* Scrollable content area */
+.summary-modal-body {
+    padding: 15px 20px;
+    overflow-y: auto;           /* Enable vertical scrolling */
+    flex-grow: 1;              /* Take up remaining space */
     text-align: left;
     font-size: 1em;
 }
-#summary-content h3 { border-bottom: 1px solid #eaebec; padding-bottom: 5px; margin-top: 19px; margin-bottom: 4px;}
-#summary-content p { margin: 5px 0; line-height: 1.5;}
-#summary-content table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.98em;}
-#summary-content th, #summary-content td { border: 1px solid #e0e2e9; padding: 6px 2px; text-align: center;}
-#summary-content th { background: #f3f6fa; }
+
+/* Modal footer (non-scrollable) */
+.summary-modal-footer {
+    padding: 10px 20px 20px 20px;
+    border-top: 1px solid #e0e2e9;
+    flex-shrink: 0;            /* Don't shrink the footer */
+    text-align: center;
+}
+
+/* Content styling within the scrollable area */
+#summary-content h3 { 
+    border-bottom: 1px solid #eaebec; 
+    padding-bottom: 5px; 
+    margin-top: 19px; 
+    margin-bottom: 10px;
+    color: #1d3557;
+}
+
+#summary-content p { 
+    margin: 8px 0; 
+    line-height: 1.5;
+}
+
+#summary-content table { 
+    width: 100%; 
+    border-collapse: collapse; 
+    margin-top: 10px; 
+    margin-bottom: 15px;
+    font-size: 0.95em;
+}
+
+#summary-content th, #summary-content td { 
+    border: 1px solid #e0e2e9; 
+    padding: 8px 6px; 
+    text-align: center;
+}
+
+#summary-content th { 
+    background: #f3f6fa; 
+    font-weight: 600;
+}
+
+#summary-content ul {
+    margin: 10px 0;
+    padding-left: 20px;
+}
+
+#summary-content li {
+    margin: 5px 0;
+    line-height: 1.4;
+}
+
+#summary-content hr {
+    margin: 20px 0;
+    border: none;
+    border-top: 2px solid #e0e2e9;
+}
+
+/* Close button styling */
 #close-summary {
-    display: block;
-    margin: 12px auto 0 auto;
+    display: inline-block;
     font-size: 15px;
-    padding: 8px 22px;
+    padding: 10px 25px;
     cursor: pointer;
     border: 1px solid #abbecb;
     background: #e8eaed;
     border-radius: 6px;
+    transition: background 0.2s;
 }
+
+#close-summary:hover {
+    background: #d6d9dc;
+}
+
+/* Custom scrollbar for webkit browsers */
+.summary-modal-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.summary-modal-body::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.summary-modal-body::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.summary-modal-body::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Mobile responsive adjustments */
 @media (max-width: 650px) {
-    .summary-modal-content, #summary-report {
-        width: 99vw;
-        max-width: 99vw;
+    #summary-report {
+        padding: 10px;
     }
+
+    .summary-modal-content {
+        max-width: 100%;
+        max-height: 95vh;
+    }
+
+    .summary-modal-header,
+    .summary-modal-body,
+    .summary-modal-footer {
+        padding-left: 15px;
+        padding-right: 15px;
+    }
+
+    #summary-content table {
+        font-size: 0.85em;
+    }
+
+    #summary-content th, #summary-content td {
+        padding: 6px 4px;
+    }
+
     body {
         padding: 2px 1px 42px 1px;
     }
+
     #simulation-status-bar {
         padding: 6px 0;
         font-size: 0.98em;
     }
+
     .station-container {
         padding: 5px 2px;
     }
