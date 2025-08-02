@@ -8,6 +8,7 @@
 </head>
 <body>
     <h1>DBR Simulation with Shift Management (Controls)</h1>
+
     <div class="controls">
         <button id="start-simulation">Start New Simulation</button>
         <button id="pause-simulation" disabled>Pause</button>
@@ -15,10 +16,12 @@
         <button id="fast-forward-simulation" disabled>Fast Forward (x1)</button>
         <button id="reset-wip" disabled>Reset WIP</button>
     </div>
+
     <div id="simulation-status-bar">
         <div>Shift Time: <span id="clock-display">00:00:00</span></div>
         <div>Status: <span id="status-display">Idle</span></div>
     </div>
+
     <div id="simulation-container">
         <div class="station-container">
             <h2>Backlog</h2>
@@ -28,7 +31,9 @@
                 <div>Avg WIP: <span class="wip-avg">0.0</span></div>
             </div>
         </div>
+
         <div id="stations-wrapper"></div>
+
         <div class="station-container">
             <h2>Finished</h2>
             <div class="wip-buffer" id="finished-goods"></div>
@@ -37,14 +42,22 @@
             </div>
         </div>
     </div>
-    <!-- Summary Report Container -->
+
+    <!-- Scrollable Summary Report Modal -->
     <div id="summary-report" class="hidden">
         <div class="summary-modal-content">
-            <h2>Shift Over!</h2>
-            <div id="summary-content"></div>
-            <button id="close-summary">Close</button>
+            <div class="summary-modal-header">
+                <h2>Shift Over!</h2>
+            </div>
+            <div class="summary-modal-body">
+                <div id="summary-content"></div>
+            </div>
+            <div class="summary-modal-footer">
+                <button id="close-summary">Close</button>
+            </div>
         </div>
     </div>
+
     <script src="script.js"></script>
 </body>
 </html>
