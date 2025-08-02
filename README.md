@@ -232,3 +232,110 @@ index.html	Base HTML structure, UI elements
 style.css	Stylesheet for layout and visuals
 script.js	Core simulation logic and UI interaction
 README.md	Project summary and URL
+# DBR Simulation - Scrollable Summary Modal Fix
+
+## Problem Solved
+The original summary popup modal could overflow the viewport when displaying extensive simulation results, making some content inaccessible to users. This update makes the modal content scrollable while maintaining a clean, professional appearance.
+
+## Files Modified
+
+### 1. `style_modified.css` (Main Changes)
+- **Modal Structure**: Converted to flexbox layout with header, body, and footer sections
+- **Scrollable Content**: Added `overflow-y: auto` to the body section with max-height constraints
+- **Visual Improvements**: Enhanced spacing, typography, and mobile responsiveness
+- **Custom Scrollbar**: Added webkit scrollbar styling for better appearance
+- **Responsive Design**: Improved mobile layout with appropriate sizing
+
+### 2. `index_modified.html` (Structure Changes)
+- **Modal Restructure**: Split modal into three sections:
+  - `.summary-modal-header` - Contains the "Shift Over!" title (fixed)
+  - `.summary-modal-body` - Contains scrollable content (scrollable)
+  - `.summary-modal-footer` - Contains the close button (fixed)
+- **CSS Reference**: Updated to use the modified stylesheet
+
+### 3. `script_modified.js` (No Changes)
+- Remains identical to original since content insertion logic is unchanged
+- All existing functionality preserved
+
+## Key Features of the Solution
+
+### Scrolling Behavior
+- **Max Height**: Modal limited to 90% of viewport height
+- **Smooth Scrolling**: Native browser scrolling with custom scrollbar
+- **Header/Footer Fixed**: Title and close button remain visible while scrolling
+- **Content Scrollable**: Only the report content scrolls
+
+### Visual Enhancements
+- **Semi-transparent Overlay**: Better visual separation from background
+- **Improved Typography**: Better heading hierarchy and spacing
+- **Enhanced Tables**: Better padding and visual structure
+- **Custom Scrollbar**: Styled scrollbar for webkit browsers
+
+### Mobile Responsiveness
+- **Full Width**: Modal uses full width on mobile devices
+- **Touch Friendly**: Optimized for touch scrolling
+- **Readable Text**: Appropriate font sizes for mobile screens
+
+## Usage Instructions
+
+1. Replace the original files with the modified versions:
+   - `index.html` â†’ `index_modified.html`
+   - `style.css` â†’ `style_modified.css`
+   - `script.js` â†’ `script_modified.js`
+
+2. Update the HTML file references:
+   - CSS: `<link rel="stylesheet" href="style_modified.css"/>`
+   - JS: `<script src="script_modified.js"></script>`
+
+3. Test the application:
+   - Run a simulation with multiple shifts to generate long reports
+   - Verify the modal is scrollable when content exceeds viewport height
+   - Test on both desktop and mobile devices
+
+## Browser Compatibility
+- **Modern Browsers**: Full support with custom scrollbar styling
+- **Older Browsers**: Fallback to default scrollbar appearance
+- **Mobile Browsers**: Native touch scrolling supported
+
+## Technical Details
+
+### CSS Changes
+```css
+/* Main modal container with overlay */
+#summary-report {
+    background: rgba(0, 0, 0, 0.5) !important;
+    padding: 20px;
+}
+
+/* Modal content with height constraints */
+.summary-modal-content {
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Scrollable body section */
+.summary-modal-body {
+    overflow-y: auto;
+    flex-grow: 1;
+}
+```
+
+### HTML Structure
+```html
+<div id="summary-report" class="hidden">
+    <div class="summary-modal-content">
+        <div class="summary-modal-header"><!-- Fixed header --></div>
+        <div class="summary-modal-body"><!-- Scrollable content --></div>
+        <div class="summary-modal-footer"><!-- Fixed footer --></div>
+    </div>
+</div>
+```
+
+## Benefits
+1. **Accessibility**: All content is now accessible regardless of screen size
+2. **User Experience**: Intuitive scrolling behavior with visual feedback
+3. **Professional Appearance**: Clean, modern modal design
+4. **Mobile Friendly**: Optimized for touch devices
+5. **Maintainable**: Clear separation of concerns in CSS and HTML structure
