@@ -60,6 +60,19 @@ export class DataAnalytics {
         return bufferStats;
     }
 
+    updateRealTimeStats(simulationTime) {
+        this.calculateUtilization();
+        
+        // Update hourly output tracking
+        const currentHour = Math.floor(simulationTime / (1000 * 3600));
+        if (currentHour < this.stats.hourlyOutput.length) {
+            const finishedGoods = document.getElementById('finished-goods');
+            this.stats.hourlyOutput[currentHour] = finishedGoods ? finishedGoods.children.length : 0;
+        }
+        
+        return this.stats;
+    }
+
     generateReport() {
         this.calculateUtilization();
         const bottleneck = this.identifyBottleneck();
@@ -75,14 +88,5 @@ export class DataAnalytics {
             stations: this.stats.stations,
             hourlyOutput: this.stats.hourlyOutput
         };
-    }
-
-    updateHourlyOutput() {
-        const currentHour = Math.floor(this.simulationTime / (1000 * 3600));
-        if (currentHour < this.stats.hourlyOutput.length) {
-            const finishedGoods = document.getElementById('finished-goods');
-            this.stats.hourlyOutput[currentHour] = finishedGoods ? 
-                finishedGoods.children.length : 0;
-        }
     }
 }
