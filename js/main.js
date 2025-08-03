@@ -26,7 +26,21 @@ class SimulationApp {
         this.uiController.elements.resetButton.addEventListener('click', () => this.resetSimulation());
         this.uiController.elements.closeSummaryButton.addEventListener('click', () => this.uiController.hideSummaryReport());
 
-        // Custom event listeners
+        // Fixed simulation step handler with all required updates
+        document.addEventListener('simulationStep', (event) => {
+            this.uiController.updateClock(event.detail.simulationTime);
+            this.uiController.updateStatus(event.detail.onBreak, event.detail.breakName);
+            this.uiController.updateBufferCounts();
+            
+            // Update statistics every 5 seconds of simulation time
+            if (event.detail.simulationTime % 5000 < 100 * this.currentSpeedIndex) {
+                if (this.dataAnalytics) {
+                    const updatedStats = this.dataAnalytics.updateRealTimeStats(event.detail.simulationTime);
+                    this.uiController.updateStationStats(updatedStats);
+                }
+            }
+        });
+
         document.addEventListener('showSummaryReport', () => this.showSummaryReport());
     }
 
@@ -81,6 +95,12 @@ class SimulationApp {
         this.uiController.disableButton('resumeButton');
         this.uiController.disableButton('ffButton');
         this.uiController.hideSummaryReport();
+
+        // Clear the display
+        const stationsWrapper = document.getElementById('stations-wrapper');
+        if (stationsWrapper) {
+            stationsWrapper.innerHTML = '';
+        }
     }
 
     showSummaryReport() {
