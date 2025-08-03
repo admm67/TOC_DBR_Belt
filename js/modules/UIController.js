@@ -62,6 +62,36 @@ export class UIController {
         });
     }
 
+    updateBufferCounts() {
+        const buffers = ['backlog-buffer', 'building-wip', 'cutting-wip', 'flipping-wip', 'curing-wip', 'finished-goods'];
+        
+        buffers.forEach(bufferId => {
+            const buffer = document.getElementById(bufferId);
+            if (buffer) {
+                const count = buffer.children.length;
+                let countDisplay = buffer.querySelector('.buffer-count');
+                if (!countDisplay) {
+                    countDisplay = document.createElement('div');
+                    countDisplay.className = 'buffer-count';
+                    countDisplay.style.cssText = `
+                        position: absolute;
+                        top: -15px;
+                        right: 5px;
+                        background: #2186eb;
+                        color: white;
+                        border-radius: 10px;
+                        padding: 2px 6px;
+                        font-size: 0.7em;
+                        font-weight: bold;
+                    `;
+                    buffer.style.position = 'relative';
+                    buffer.appendChild(countDisplay);
+                }
+                countDisplay.textContent = count;
+            }
+        });
+    }
+
     createStationHTML(config, stats) {
         this.elements.stationsWrapper.innerHTML = '';
 
@@ -106,32 +136,74 @@ export class UIController {
     }
 
     generateSummaryHTML(reportData) {
-        // This would contain the HTML generation logic from your original showSummaryReport function
-        // Return the HTML string to be inserted into the modal
-        return `
+        const totalSimHours = reportData.totalSimHours;
+        const lineThroughput = reportData.hourlyOutput.reduce((sum, val) => sum + val, 0) / totalSimHours;
+        
+        let summaryHTML = `
             <h3>Simulation Parameters</h3>
             <table>
                 <tr><th>Parameter</th><th>Value</th></tr>
-                <tr><td>Number of Shifts</td><td>${reportData.totalSimHours / 8}</td></tr>
-                <!-- Add more parameters -->
+                <tr><td>Number of Shifts</td><td>${totalSimHours / 8}</td></tr>
+                <tr><td>Building Machines</td><td>${reportData.throughput.Building ? reportData.throughput.Building.capacity || 'N/A' : 'N/A'}</td></tr>
+                <tr><td>Cutting Machines</td><td>${reportData.throughput.Cutting ? reportData.throughput.Cutting.capacity || 'N/A' : 'N/A'}</td></tr>
+                <tr><td>Flipping Machines</td><td>${reportData.throughput.Flipping ? reportData.throughput.Flipping.capacity || 'N/A' : 'N/A'}</td></tr>
+                <tr><td>Curing Machines</td><td>${reportData.throughput.Curing ? reportData.throughput.Curing.capacity || 'N/A' : 'N/A'}</td></tr>
+                <tr><td>Coding Machines</td><td>${reportData.throughput.Coding ? reportData.throughput.Coding.capacity || 'N/A' : 'N/A'}</td></tr>
             </table>
+            
+            <h3>Hourly Output</h3>
+            <table>
+                <tr><th>Hour</th><th>Sets Completed</th></tr>
+        `;
+
+        reportData.hourlyOutput.forEach((hourlyCount, i) => {
+            summaryHTML += `<tr><td>${i + 1}</td><td>${hourlyCount}</td></tr>`;
+        });
+
+        summaryHTML += `
+            </table>
+            <p><strong>Overall Line Throughput:</strong> ${lineThroughput.toFixed(2)} sets per hour</p>
             
             <h3>Station Performance</h3>
             <table>
-                <tr><th>Station</th><th>Throughput</th><th>Utilization</th><th>Sets Processed</th></tr>
-                ${Object.values(reportData.throughput).map(station => `
-                    <tr>
-                        <td>${station.name}</td>
-                        <td>${station.throughputPerHour.toFixed(2)}</td>
-                        <td>${station.utilization.toFixed(1)}%</td>
-                        <td>${station.setsProcessed}</td>
-                    </tr>
-                `).join('')}
+                <tr><th>Station</th><th>Throughput (Sets/Hr)</th><th>Avg. Utilization</th><th>Idle Time (min)</th><th>Completed Sets</th></tr>
+        `;
+
+        Object.values(reportData.throughput).forEach(station => {
+            const throughput = station.throughputPerHour || 0;
+            summaryHTML += `
+                <tr>
+                    <td>${station.name}</td>
+                    <td>${throughput.toFixed(2)}</td>
+                    <td>${station.utilization.toFixed(1)}%</td>
+                    <td>${(station.idleTime / (1000 * 60)).toFixed(1)}</td>
+                    <td>${station.setsProcessed}</td>
+                </tr>
+            `;
+        });
+
+        summaryHTML += `
+            </table>
+            
+            <h3>Buffer Analysis</h3>
+            <table>
+                <tr><th>Buffer</th><th>Actual WIP (End)</th></tr>
+        `;
+
+        Object.keys(reportData.bufferStats).forEach(bufferId => {
+            const buffer = reportData.bufferStats[bufferId];
+            const name = bufferId.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase());
+            summaryHTML += `<tr><td>${name}</td><td>${buffer.final}</td></tr>`;
+        });
+
+        summaryHTML += `
             </table>
             
             <h3>Bottleneck Analysis</h3>
-            <p><strong>Primary Bottleneck:</strong> ${reportData.bottleneck.name} with ${reportData.bottleneck.utilization.toFixed(1)}% utilization.</p>
+            <p><strong>Primary Bottleneck:</strong> The simulation identifies <strong>${reportData.bottleneck.name}</strong> as the primary constraint with <strong>${reportData.bottleneck.utilization.toFixed(1)}%</strong> utilization.</p>
         `;
+
+        return summaryHTML;
     }
 
     showSummaryReport(reportData) {
@@ -145,7 +217,6 @@ export class UIController {
     }
 
     showCompletionModal() {
-        // Trigger the summary report display
         document.dispatchEvent(new CustomEvent('showSummaryReport'));
     }
 
@@ -160,11 +231,15 @@ export class UIController {
     }
 
     enableButton(buttonName) {
-        this.elements[buttonName].disabled = false;
+        if (this.elements[buttonName]) {
+            this.elements[buttonName].disabled = false;
+        }
     }
 
     disableButton(buttonName) {
-        this.elements[buttonName].disabled = true;
+        if (this.elements[buttonName]) {
+            this.elements[buttonName].disabled = true;
+        }
     }
 
     updateSpeedButton(multiplier) {
