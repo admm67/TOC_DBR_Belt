@@ -32,13 +32,43 @@ export class SimulationEngine {
 
         if (!stationElement || !inputBuffer) return;
 
+        // Determine capacity based on break status
         const capacity = onBreak && station.breakCapacity ? 
             station.breakCapacity : station.capacity;
+
+        // STEP 1: Process completed sets FIRST (immediate changeover)
+        const completedSets = [];
+        Array.from(stationElement.children).forEach(setElement => {
+            const startTime = parseInt(setElement.getAttribute('data-start-time'));
+            const processingTime = parseInt(setElement.getAttribute('data-processing-time'));
+            
+            // Check if processing is complete
+            if (this.simulationTime >= startTime + processingTime) {
+                completedSets.push(setElement);
+            }
+        });
+
+        // Move completed sets immediately
+        completedSets.forEach(setElement => {
+            setElement.classList.remove('processing');
+            
+            if (station.outputBuffer === 'finished-goods') {
+                if (outputBuffer) {
+                    outputBuffer.appendChild(setElement);
+                }
+            } else if (outputBuffer) {
+                outputBuffer.appendChild(setElement);
+            }
+            
+            // Update statistics
+            this.stats.stations[stationId].setsProcessed++;
+        });
+
+        // STEP 2: Move new sets from input to processing
         const availableSlots = capacity - stationElement.children.length;
         const inputSets = inputBuffer.children.length;
         const setsToProcess = Math.min(availableSlots, inputSets);
 
-        // Move sets from input to processing
         for (let i = 0; i < setsToProcess; i++) {
             const setElement = inputBuffer.children[0];
             if (setElement) {
@@ -49,27 +79,7 @@ export class SimulationEngine {
             }
         }
 
-        // Process completed sets
-        Array.from(stationElement.children).forEach(setElement => {
-            const startTime = parseInt(setElement.getAttribute('data-start-time'));
-            const processingTime = parseInt(setElement.getAttribute('data-processing-time'));
-            
-            if (this.simulationTime >= startTime + processingTime) {
-                setElement.classList.remove('processing');
-                
-                if (station.outputBuffer === 'finished-goods') {
-                    if (outputBuffer) {
-                        outputBuffer.appendChild(setElement);
-                    }
-                    this.stats.stations[stationId].setsProcessed++;
-                } else if (outputBuffer) {
-                    outputBuffer.appendChild(setElement);
-                    this.stats.stations[stationId].setsProcessed++;
-                }
-            }
-        });
-
-        // Update statistics
+        // STEP 3: Update working/idle statistics
         const isWorking = stationElement.children.length > 0 && !onBreak;
         if (isWorking) {
             this.stats.stations[stationId].workingTime += 100 * this.currentSpeedMultiplier;
@@ -87,7 +97,7 @@ export class SimulationEngine {
             this.processStation(stationId, station, onBreak);
         });
 
-        // Correct time advancement - fixed scaling issue
+        // Proper time advancement that scales with speed multiplier
         this.simulationTime += 100 * this.currentSpeedMultiplier;
         
         return {
@@ -111,7 +121,7 @@ export class SimulationEngine {
                 this.stop();
                 document.dispatchEvent(new CustomEvent('simulationComplete'));
             }
-        }, 100);
+        }, 100); // Keep interval at 100ms, but scale time advancement internally
     }
 
     pause() {
