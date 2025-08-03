@@ -1,5 +1,4 @@
-
-}/* ========================================
+/* ========================================
    CSS CUSTOM PROPERTIES (VARIABLES)
    ======================================== */
 :root {
@@ -154,24 +153,6 @@ h1 {
   box-shadow: 0 2px 8px rgba(231, 69, 69, 0.3);
 }
 
-/* Button Loading State */
-.controls button.loading::after {
-  content: "";
-  position: absolute;
-  width: 16px;
-  height: 16px;
-  margin: auto;
-  border: 2px solid transparent;
-  border-top-color: currentColor;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
 /* ========================================
    STATUS BAR
    ======================================== */
@@ -306,19 +287,6 @@ h1 {
   background: #f0f8ff;
 }
 
-.wip-buffer::before {
-  content: attr(data-buffer-name);
-  position: absolute;
-  top: -10px;
-  left: 8px;
-  background: var(--background-white);
-  padding: 2px 6px;
-  font-size: 0.75em;
-  color: var(--text-secondary);
-  border-radius: 3px;
-  font-weight: 500;
-}
-
 /* Drum Station Styling */
 .drum { 
   border: 3px solid var(--drum-red);
@@ -370,6 +338,22 @@ h1 {
 @keyframes processing {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.05); }
+}
+
+/* ========================================
+   BUFFER COUNT DISPLAYS
+   ======================================== */
+.buffer-count {
+  position: absolute;
+  top: -15px;
+  right: 5px;
+  background: var(--primary-blue);
+  color: white;
+  border-radius: 10px;
+  padding: 2px 6px;
+  font-size: 0.7em;
+  font-weight: bold;
+  z-index: 10;
 }
 
 /* ========================================
@@ -704,4 +688,3 @@ h1 {
     display: none !important;
   }
 }
-
