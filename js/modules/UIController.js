@@ -83,6 +83,7 @@ export class UIController {
                         padding: 2px 6px;
                         font-size: 0.7em;
                         font-weight: bold;
+                        z-index: 10;
                     `;
                     buffer.style.position = 'relative';
                     buffer.appendChild(countDisplay);
@@ -200,7 +201,7 @@ export class UIController {
             </table>
             
             <h3>Bottleneck Analysis</h3>
-            <p><strong>Primary Bottleneck:</strong> The simulation identifies <strong>${reportData.bottleneck.name}</strong> as the primary constraint with <strong>${reportData.bottleneck.utilization.toFixed(1)}%</strong> utilization.</p>
+            <p><strong>Primary Bottleneck:</strong> The simulation identifies <strong>${reportData.bottleneck ? reportData.bottleneck.name : 'N/A'}</strong> as the primary constraint with <strong>${reportData.bottleneck ? reportData.bottleneck.utilization.toFixed(1) : '0'}%</strong> utilization.</p>
         `;
 
         return summaryHTML;
@@ -222,11 +223,13 @@ export class UIController {
 
     addInitialBacklog(backlogSize) {
         const backlogBuffer = document.getElementById('backlog-buffer');
-        for (let i = 1; i <= backlogSize; i++) {
-            const set = document.createElement('div');
-            set.className = 'v-belt-set';
-            set.textContent = i;
-            backlogBuffer.appendChild(set);
+        if (backlogBuffer) {
+            for (let i = 1; i <= backlogSize; i++) {
+                const set = document.createElement('div');
+                set.className = 'v-belt-set';
+                set.textContent = i;
+                backlogBuffer.appendChild(set);
+            }
         }
     }
 
