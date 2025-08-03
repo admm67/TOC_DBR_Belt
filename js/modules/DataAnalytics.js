@@ -36,7 +36,7 @@ export class DataAnalytics {
             const station = this.stats.stations[stationId];
             results[stationId] = {
                 ...station,
-                throughputPerHour: station.setsProcessed / totalSimHours
+                throughputPerHour: totalSimHours > 0 ? station.setsProcessed / totalSimHours : 0
             };
         });
 
@@ -47,7 +47,7 @@ export class DataAnalytics {
         const bufferStats = {};
         Object.keys(this.stats.buffers).forEach(bufferId => {
             const buffer = this.stats.buffers[bufferId];
-            if (buffer.history.length > 0) {
+            if (buffer.history && buffer.history.length > 0) {
                 const sum = buffer.history.reduce((a, b) => a + b, 0);
                 bufferStats[bufferId] = {
                     average: sum / buffer.history.length,
