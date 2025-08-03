@@ -26,14 +26,15 @@ class SimulationApp {
         this.uiController.elements.resetButton.addEventListener('click', () => this.resetSimulation());
         this.uiController.elements.closeSummaryButton.addEventListener('click', () => this.uiController.hideSummaryReport());
 
-        // Fixed simulation step handler with all required updates
+        // Fixed simulation step handler with proper fast forward support
         document.addEventListener('simulationStep', (event) => {
             this.uiController.updateClock(event.detail.simulationTime);
             this.uiController.updateStatus(event.detail.onBreak, event.detail.breakName);
             this.uiController.updateBufferCounts();
             
-            // Update statistics every 5 seconds of simulation time
-            if (event.detail.simulationTime % 5000 < 100 * this.currentSpeedIndex) {
+            // Update statistics more frequently during fast forward
+            const updateInterval = Math.max(1000, 5000 / this.getCurrentSpeedMultiplier());
+            if (event.detail.simulationTime % updateInterval < 100 * this.getCurrentSpeedMultiplier()) {
                 if (this.dataAnalytics) {
                     const updatedStats = this.dataAnalytics.updateRealTimeStats(event.detail.simulationTime);
                     this.uiController.updateStationStats(updatedStats);
@@ -42,6 +43,10 @@ class SimulationApp {
         });
 
         document.addEventListener('showSummaryReport', () => this.showSummaryReport());
+    }
+
+    getCurrentSpeedMultiplier() {
+        return this.simulationEngine ? this.simulationEngine.currentSpeedMultiplier : 1;
     }
 
     startSimulation() {
@@ -101,6 +106,19 @@ class SimulationApp {
         if (stationsWrapper) {
             stationsWrapper.innerHTML = '';
         }
+        
+        // Reset clock display
+        const clockDisplay = document.getElementById('clock-display');
+        if (clockDisplay) {
+            clockDisplay.textContent = '00:00:00';
+        }
+        
+        // Reset status display
+        const statusDisplay = document.getElementById('status-display');
+        if (statusDisplay) {
+            statusDisplay.textContent = 'Stopped';
+            statusDisplay.classList.remove('on-break');
+        }
     }
 
     showSummaryReport() {
@@ -123,6 +141,7 @@ class SimulationApp {
             this.stats.stations[id] = {
                 id,
                 name: station.name,
+                capacity: station.capacity,
                 setsProcessed: 0,
                 idleTime: 0,
                 workingTime: 0,
