@@ -27,7 +27,8 @@ export class SimulationEngine {
         const stationElement = document.getElementById(stationId);
         const inputBuffer = document.getElementById(station.inputBuffer);
         const outputBuffer = station.outputBuffer !== 'finished-goods' ? 
-            document.getElementById(station.outputBuffer) : null;
+            document.getElementById(station.outputBuffer) : 
+            document.getElementById('finished-goods');
 
         if (!stationElement || !inputBuffer) return;
 
@@ -57,7 +58,9 @@ export class SimulationEngine {
                 setElement.classList.remove('processing');
                 
                 if (station.outputBuffer === 'finished-goods') {
-                    setElement.remove();
+                    if (outputBuffer) {
+                        outputBuffer.appendChild(setElement);
+                    }
                     this.stats.stations[stationId].setsProcessed++;
                 } else if (outputBuffer) {
                     outputBuffer.appendChild(setElement);
@@ -84,6 +87,7 @@ export class SimulationEngine {
             this.processStation(stationId, station, onBreak);
         });
 
+        // Correct time advancement - fixed scaling issue
         this.simulationTime += 100 * this.currentSpeedMultiplier;
         
         return {
