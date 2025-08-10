@@ -22,22 +22,26 @@ export class ConfigManager {
 
     setupConfiguration(params) {
         this.initialBacklogSize = params.backlog;
-        
+
+        // Duration in MINUTES (8 hrs per shift)
+        const totalShiftMinutes = params.shifts * 8 * 60;
+
         this.activeConfig = {
-            timeScale: 60,
             shiftDetails: {
-                duration: params.shifts * 8 * 3600 * 1000,
-                breaks: []
+                duration: totalShiftMinutes, // minutes (engine converts to ms)
+                breaks: [] // minutes
             },
             stations: {
                 Building: {
+                    type: "normal",
                     name: "Building",
                     capacity: params.building,
-                    time: 379.2,
+                    time: 379.2, // seconds per unit
                     inputBuffer: 'backlog-buffer',
                     outputBuffer: 'building-wip'
                 },
                 Cutting: {
+                    type: "normal",
                     name: "Cutting",
                     capacity: params.cutting,
                     time: 240,
@@ -45,6 +49,7 @@ export class ConfigManager {
                     outputBuffer: 'cutting-wip'
                 },
                 Flipping: {
+                    type: "normal",
                     name: "Flipping",
                     capacity: params.flipping,
                     time: 600,
@@ -52,6 +57,7 @@ export class ConfigManager {
                     outputBuffer: 'flipping-wip'
                 },
                 Curing: {
+                    type: "curing", // important for break handling
                     name: "Curing (DRUM)",
                     capacity: params.curing,
                     breakCapacity: Math.ceil(params.curing / 2),
@@ -61,6 +67,7 @@ export class ConfigManager {
                     isDrum: true
                 },
                 Coding: {
+                    type: "normal",
                     name: "Coding",
                     capacity: params.coding,
                     time: 496.2,
@@ -70,24 +77,25 @@ export class ConfigManager {
             }
         };
 
-        // Setup breaks for each shift
+        // Breaks in minutes (shift start = 0, 8 hrs = 480 mins)
         for (let i = 0; i < params.shifts; i++) {
-            const shiftStart = i * 8 * 3600 * 1000;
+            const shiftStartMin = i * 8 * 60;
+
             this.activeConfig.shiftDetails.breaks.push(
                 {
                     name: `S${i+1} Bio 1`,
-                    start: shiftStart + (2 * 3600 * 1000),
-                    end: shiftStart + (2 * 3600 * 1000) + (10 * 60 * 1000)
+                    start: shiftStartMin + 120, // 2 hrs into shift
+                    end: shiftStartMin + 130    // +10 mins
                 },
                 {
                     name: `S${i+1} Lunch`,
-                    start: shiftStart + (4 * 3600 * 1000),
-                    end: shiftStart + (4 * 3600 * 1000) + (30 * 60 * 1000)
+                    start: shiftStartMin + 240, // 4 hrs in
+                    end: shiftStartMin + 270    // +30 mins
                 },
                 {
                     name: `S${i+1} Bio 2`,
-                    start: shiftStart + (6 * 3600 * 1000),
-                    end: shiftStart + (6 * 3600 * 1000) + (10 * 60 * 1000)
+                    start: shiftStartMin + 360, // 6 hrs in
+                    end: shiftStartMin + 370    // +10 mins
                 }
             );
         }
