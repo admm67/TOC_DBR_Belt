@@ -1,4 +1,3 @@
-// js/modules/SimulationEngine.js
 export class SimulationEngine {
     constructor(config, stats) {
         this.config = config;
@@ -9,26 +8,38 @@ export class SimulationEngine {
         this.dashboardInterval = null;
         this.currentSpeedMultiplier = 1;
 
-        // Time scaling: 1 real second = 1 sim minute
+        // Base: 1 real second = 1 simulated minute (60,000 ms)
         this.baseSimMsPerRealSecond = 60000;
         this.stepIntervalRealMs = 100; // loop every 100 ms real time
+        this.updateSimStepIncrement();
+    }
+
+    updateSimStepIncrement() {
         this.simStepIncrement = (this.baseSimMsPerRealSecond / 1000) * this.stepIntervalRealMs;
     }
 
-    // Convert breaks from minutes to ms for comparison
+    // Check if current time is in a break period
     isOnBreak(currentTime) {
-        return this.config.shiftDetails.breaks.some(breakPeriod =>
-            currentTime >= breakPeriod.start * 60 * 1000 &&
-            currentTime <= breakPeriod.end * 60 * 1000
-        );
+        return this.config.shiftDetails.breaks.some(breakPeriod => {
+            const startMs = this.convertBreakTimeToMs(breakPeriod.start);
+            const endMs = this.convertBreakTimeToMs(breakPeriod.end);
+            return currentTime >= startMs && currentTime <= endMs;
+        });
     }
 
     getCurrentBreakName(currentTime) {
-        const currentBreak = this.config.shiftDetails.breaks.find(breakPeriod =>
-            currentTime >= breakPeriod.start * 60 * 1000 &&
-            currentTime <= breakPeriod.end * 60 * 1000
-        );
+        const currentBreak = this.config.shiftDetails.breaks.find(breakPeriod => {
+            const startMs = this.convertBreakTimeToMs(breakPeriod.start);
+            const endMs = this.convertBreakTimeToMs(breakPeriod.end);
+            return currentTime >= startMs && currentTime <= endMs;
+        });
         return currentBreak ? currentBreak.name : null;
+    }
+
+    convertBreakTimeToMs(value) {
+        // Allow break times in minutes or seconds — config can set `breakTimeUnit: "seconds" | "minutes"`
+        const unit = this.config.shiftDetails.breakTimeUnit || "minutes";
+        return unit === "seconds" ? value * 1000 : value * 60 * 1000;
     }
 
     processStation(stationId, station, onBreak) {
@@ -40,19 +51,16 @@ export class SimulationEngine {
 
         if (!stationElement || !inputBuffer) return;
 
-        // Skip stations during break unless they are curing
-        if (onBreak && station.type !== 'curing') {
-            // Count idle time during break
+        // Skip stations during break unless they are curing (isDrum = true)
+        if (onBreak && !station.isDrum) {
             this.stats.stations[stationId].idleTime += this.simStepIncrement * this.currentSpeedMultiplier;
             return;
         }
 
-        // Determine capacity based on break status
-        const capacity = onBreak && station.breakCapacity
-            ? station.breakCapacity
-            : station.capacity;
+        // Adjust capacity during break if breakCapacity is set
+        const capacity = onBreak && station.breakCapacity ? station.breakCapacity : station.capacity;
 
-        // STEP 1: Update ongoing processing
+        // --- Step 1: Update processing items ---
         const completedSets = [];
         Array.from(stationElement.children).forEach(setElement => {
             let remaining = parseInt(setElement.getAttribute('data-remaining-time'), 10);
@@ -64,9 +72,9 @@ export class SimulationEngine {
             }
         });
 
-        // Batch move completed sets
+        // Move completed items in a batch for performance
         if (completedSets.length > 0) {
-            const frag = document.createDocumentFragment();
+            const frag = document.createDocumentFragment(); // Holds items before DOM insert
             completedSets.forEach(setElement => {
                 setElement.classList.remove('processing');
                 frag.appendChild(setElement);
@@ -75,7 +83,7 @@ export class SimulationEngine {
             outputBuffer.appendChild(frag);
         }
 
-        // STEP 2: Move new sets into processing if space available
+        // --- Step 2: Start processing new sets ---
         const availableSlots = capacity - stationElement.children.length;
         const setsToProcess = Math.min(availableSlots, inputBuffer.children.length);
         if (setsToProcess > 0) {
@@ -84,15 +92,16 @@ export class SimulationEngine {
                 const setElement = inputBuffer.children[0];
                 if (setElement) {
                     setElement.classList.add('processing');
-                    setElement.setAttribute('data-remaining-time', station.time * 1000); // seconds → ms
+                    // Time scaled by multiplier so speeding up works
+                    setElement.setAttribute('data-remaining-time', (station.time * 1000) / this.currentSpeedMultiplier);
                     frag.appendChild(setElement);
                 }
             }
             stationElement.appendChild(frag);
         }
 
-        // STEP 3: Update working/idle time
-        const isWorking = stationElement.children.length > 0 && !onBreak;
+        // --- Step 3: Track working/idle ---
+        const isWorking = stationElement.children.length > 0;
         if (isWorking) {
             this.stats.stations[stationId].workingTime += this.simStepIncrement * this.currentSpeedMultiplier;
         } else {
@@ -103,20 +112,18 @@ export class SimulationEngine {
     runSimulationStep() {
         const onBreak = this.isOnBreak(this.simulationTime);
 
-        // Process each station
         Object.keys(this.config.stations).forEach(stationId => {
             const station = this.config.stations[stationId];
             this.processStation(stationId, station, onBreak);
         });
 
-        // Advance simulation time scaled by multiplier
         this.simulationTime += this.simStepIncrement * this.currentSpeedMultiplier;
 
         return {
             simulationTime: this.simulationTime,
             onBreak,
             breakName: this.getCurrentBreakName(this.simulationTime),
-            completed: this.simulationTime >= this.config.shiftDetails.duration * 60 * 1000 // minutes → ms
+            completed: this.simulationTime >= this.convertBreakTimeToMs(this.config.shiftDetails.duration)
         };
     }
 
@@ -124,9 +131,7 @@ export class SimulationEngine {
         this.simulationInterval = setInterval(() => {
             const result = this.runSimulationStep();
 
-            document.dispatchEvent(new CustomEvent('simulationStep', {
-                detail: result
-            }));
+            document.dispatchEvent(new CustomEvent('simulationStep', { detail: result }));
 
             if (result.completed) {
                 this.stop();
@@ -136,31 +141,24 @@ export class SimulationEngine {
     }
 
     pause() {
-        if (this.simulationInterval) {
-            clearInterval(this.simulationInterval);
-            this.simulationInterval = null;
-        }
+        clearInterval(this.simulationInterval);
+        this.simulationInterval = null;
     }
 
     resume() {
-        if (!this.simulationInterval) {
-            this.start();
-        }
+        if (!this.simulationInterval) this.start();
     }
 
     stop() {
-        if (this.simulationInterval) {
-            clearInterval(this.simulationInterval);
-            this.simulationInterval = null;
-        }
-        if (this.dashboardInterval) {
-            clearInterval(this.dashboardInterval);
-            this.dashboardInterval = null;
-        }
+        clearInterval(this.simulationInterval);
+        clearInterval(this.dashboardInterval);
+        this.simulationInterval = null;
+        this.dashboardInterval = null;
     }
 
     setSpeedMultiplier(multiplier) {
         this.currentSpeedMultiplier = multiplier;
+        this.updateSimStepIncrement();
     }
 
     reset() {
@@ -168,6 +166,7 @@ export class SimulationEngine {
         this.simulationTime = 0;
         this.setCounter = 0;
         this.currentSpeedMultiplier = 1;
+        this.updateSimStepIncrement();
 
         Object.keys(this.stats.stations).forEach(stationId => {
             this.stats.stations[stationId] = {
